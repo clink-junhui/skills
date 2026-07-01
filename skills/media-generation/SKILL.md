@@ -2,6 +2,9 @@
 name: modelmax-media
 description: "Generate images and videos via ModelMax APIs. CRITICAL RULES: (1) INSTALL NOTIFICATION MANDATE: The moment this skill finishes installing, you MUST send exactly one install success notification through `send-message.mjs` using the unified `message_key + vars` payload. (2) ACTIVATION ROUTING: If the user sends a ModelMax API key, including a bare message that starts with `sk-`, this skill MUST treat it as activation input, store it via the local skill config helper, fetch balance, and continue activation in the same turn. (3) MANDATORY TOOL USE: ALWAYS call generate_image and generate_video via mcporter with the explicit config path under `~/.openclaw/config/mcporter.json` (do NOT omit `--args`). NEVER use curl or direct API calls."
 version: "1.0.0"
+related_skills:
+  - openclaw-payment-skills
+  - clink-payment-skill
 metadata:
   openclaw:
     scriptsDir: "scripts"
@@ -102,25 +105,43 @@ There are only two valid amount sources for ModelMax recharge:
 
 2. Merchant default (Direct Mode Only)
    - In Direct Mode (no `sessionId` provided by the 402 error), if the user does not explicitly provide a concrete recharge amount in the current turn, you MUST call `get_payment_config` and use the returned `default_amount` exactly as-is.
-   - In Session Mode (when the 402 error provides a `sessionId`), do NOT provide an amount and do NOT call `get_payment_config`. The amount is already bound to the session.
+   - In Session Mode (when the 402 error provides a `sessionId`), do NOT call `get_payment_config`. The amount is bound to the session, but the 402/session context must still expose amount, currency, or a complete mandate scope for Visa/VIC matching.
 
 You MUST NOT invent a third amount from memory, prior turns, habit, or judgment.
 You MUST NOT replace the merchant default with `1`, `5`, or any other arbitrary amount unless the user explicitly asked for that amount in the current turn.
 
 ## Merchant Payment Handoff Contract
 
-ModelMax should drive its own Clink payment flow and call `agent-payment-skills.clink_pay` directly.
+### Payment Skill Dependency Boundary
+
+- OpenClaw runtime depends on `openclaw-payment-skills`; its registered MCP server name is `agent-payment-skills`, so OpenClaw payment calls use `agent-payment-skills.<tool>`.
+- Non-OpenClaw runtime depends on the `agentic-payment-skills` repository, whose skill name is `clink-payment-skill`; use that skill's invocation surface for generic agent payment execution.
+- Do not treat `openclaw-payment-skills` and `agentic-payment-skills` as competing runtime servers in the same environment. Select exactly one payment dependency by runtime first, then let that payment skill own the Clink FSM.
+
+ModelMax should drive its own merchant payment intent and hand off Clink execution to the runtime-specific payment skill. In OpenClaw, call `agent-payment-skills.clink_pay` directly.
 
 - The `merchant_integration.server` value MUST match the server name provided in the HTTP 402 Auto-Pay SYSTEM DIRECTIVE. Do NOT guess or hardcode this value.
 
 - For session-mode flows, pass:
   - `sessionId`
+  - `fulfillmentType: "NO_SHIPPING_REQUIRED"`
+  - `title: "ModelMax credits recharge"`
+  - `description`
+  - `merchantName: "ModelMax"`
+  - `mandates` with `amountLimit`, `currencyCode`, and `preferredMerchantName: "ModelMax"`
+  - `products` containing `ModelMax Credits` with `unitPrice` in the same currency
   - `merchant_integration: {"server":"<VALUE_FROM_DIRECTIVE>","confirm_tool":"check_recharge_status","confirm_args":{}}`
+  - Do NOT call `agent-payment-skills.clink_pay` with only `sessionId`; if the session 402 payload lacks amount/currency mandate scope, stop and require the session payment context first.
 - For direct-mode flows, call `get_payment_config` first, then pass:
   - `merchant_id`
   - `amount`
   - `currency`
+  - `fulfillmentType: "NO_SHIPPING_REQUIRED"`
+  - `title`, `description`, `merchantName`
+  - `mandates` and `products` matching the exact amount/currency
   - `merchant_integration: {"server":"<VALUE_FROM_DIRECTIVE>","confirm_tool":"check_recharge_status","confirm_args":{}}`
+
+If `agent-payment-skills.clink_pay` returns `state=INSTRUCTION_WORKFLOW_REQUIRED` with a pending payment intent / `Payment Intent ID`, ModelMax must stop the current pay attempt and keep the pending task. Do not call pay again and do not provide `instruction_id` or `mandate_id` from ModelMax. The payment skill owns `resume_pending_payment_intent` after instruction activation and will later emit the payment handoff for `check_recharge_status`.
 
 ## Sending Notifications
 
@@ -223,8 +244,9 @@ Important:
 
 **During later 402 auto-pay recovery:**
 - `payment handoff` means the payment layer has confirmed successful payment and provided a structured `payment_handoff` payload for merchant recharge confirmation.
-- For session-based recovery, call `agent-payment-skills.clink_pay` with `sessionId` and `merchant_integration`.
-- For direct-mode recovery, call `get_payment_config` first, then call `agent-payment-skills.clink_pay` with `merchant_id`, `amount`, `currency`, and `merchant_integration`.
+- For session-based recovery, call `agent-payment-skills.clink_pay` with `sessionId`, `NO_SHIPPING_REQUIRED`, mandate scope, products, and `merchant_integration`; never with only `sessionId`.
+- For direct-mode recovery, call `get_payment_config` first, then call `agent-payment-skills.clink_pay` with `merchant_id`, `amount`, `currency`, `NO_SHIPPING_REQUIRED`, mandate scope, products, and `merchant_integration`.
+- If payment returns a pending payment intent, wait for the payment skill's `resume_pending_payment_intent` flow and final payment handoff.
 - If a later payment handoff arrives, you MUST pass its `payment_handoff` object through to `check_recharge_status` exactly as received.
 
 ### 402 Recovery Contract (Hard Rule)
