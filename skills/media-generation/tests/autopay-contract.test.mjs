@@ -20,6 +20,20 @@ test('ModelMax auto-pay clink_pay payloads include old-pay fulfillment, mandate 
   assert.doesNotMatch(indexSource, /"merchant_id":"<MERCHANT_ID>","amount":<AMOUNT>,"currency":"USD","merchant_integration"/);
 });
 
+test('ModelMax credit product defaults are explicit and amount-driven', () => {
+  assert.match(indexSource, /const MODEL_MAX_CREDIT_PRODUCT_ID = "modelmax-credits"/);
+  assert.match(indexSource, /const MODEL_MAX_CREDIT_PRODUCT_NAME = "ModelMax Credits"/);
+  assert.match(indexSource, /productId: MODEL_MAX_CREDIT_PRODUCT_ID/);
+  assert.match(indexSource, /productName: MODEL_MAX_CREDIT_PRODUCT_NAME/);
+  assert.match(indexSource, /quantity: 1/);
+  assert.match(indexSource, /unitPrice: amount/);
+
+  assert.match(skillSource, /productId: "modelmax-credits"/);
+  assert.match(skillSource, /productName: "ModelMax Credits"/);
+  assert.match(skillSource, /quantity: 1/);
+  assert.match(skillSource, /unitPrice: selected amount/i);
+});
+
 test('ModelMax docs stop session pay when session amount/currency scope is missing', () => {
   assert.match(skillSource, /Session Mode/);
   assert.match(skillSource, /amount.*currency.*mandate scope/is);
@@ -28,6 +42,23 @@ test('ModelMax docs stop session pay when session amount/currency scope is missi
   assert.match(skillSource, /products/);
   assert.match(skillSource, /pending payment intent/i);
   assert.match(skillSource, /resume_pending_payment_intent/);
+});
+
+test('ModelMax manual recharge docs require explicit amount override and merchant confirmation handoff', () => {
+  assert.match(skillSource, /Manual Recharge Flow/i);
+  assert.match(skillSource, /explicit.*amount.*overrides.*default_amount/is);
+  assert.match(skillSource, /get_payment_config[\s\S]+merchant_id[\s\S]+default_amount[\s\S]+currency/i);
+  assert.match(skillSource, /pre_check_account[\s\S]+clink_pay[\s\S]+check_recharge_status/i);
+  assert.match(skillSource, /manual recharge[\s\S]+current registered ModelMax MCP server/i);
+});
+
+test('ModelMax direct 402 directive selects current-turn recharge amount before merchant default', () => {
+  assert.match(indexSource, /selected amount/i);
+  assert.match(indexSource, /explicit current-turn recharge amount/i);
+  assert.match(indexSource, /otherwise.*default_amount/is);
+  assert.doesNotMatch(indexSource, /with the merchant_id, default_amount, currency/);
+  assert.doesNotMatch(indexSource, /Do NOT ask the user for an amount/);
+  assert.doesNotMatch(indexSource, /Replace <MERCHANT_ID>, <AMOUNT>, and <CURRENCY> with the exact values returned by get_payment_config/);
 });
 
 test('ModelMax declares environment-specific payment skill dependencies without Hermes metadata', () => {

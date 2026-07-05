@@ -110,6 +110,25 @@ There are only two valid amount sources for ModelMax recharge:
 You MUST NOT invent a third amount from memory, prior turns, habit, or judgment.
 You MUST NOT replace the merchant default with `1`, `5`, or any other arbitrary amount unless the user explicitly asked for that amount in the current turn.
 
+## Manual Recharge Flow
+
+When the user explicitly asks to recharge ModelMax, for example "我要给 ModelMax 充值 1usd", this is a manual recharge request, not a 402 auto-pay recovery.
+
+1. Parse the current-turn amount and currency. An explicit current-turn amount overrides `default_amount`.
+2. Call `get_payment_config` to fetch the fresh `merchant_id`, `default_amount`, and `currency`.
+3. Select the final payment amount:
+   - if the user provided an explicit amount in the current turn, use that amount and the requested/default currency;
+   - otherwise use the exact `default_amount` and `currency` returned by `get_payment_config`.
+4. Call `agent-payment-skills.pre_check_account`.
+5. Call `agent-payment-skills.clink_pay` with `merchant_id`, selected `amount`, selected `currency`, `fulfillmentType: "NO_SHIPPING_REQUIRED"`, `merchantName: "ModelMax"`, ModelMax Credits `products`, matching `mandates`, and `merchant_integration.confirm_tool: "check_recharge_status"`.
+   - The ModelMax Credits product is fixed as `productId: "modelmax-credits"` and `productName: "ModelMax Credits"`.
+   - Set `quantity: 1`.
+   - Set `unitPrice: selected amount`, where selected amount is the explicit user recharge amount when present, otherwise `default_amount`.
+6. Wait for the payment layer's structured `payment_handoff`.
+7. Call `check_recharge_status` exactly once with that `payment_handoff`. Do not send merchant-layer recharge success before `check_recharge_status` returns `credited=true` or `status=paid`.
+
+For manual recharge, `merchant_integration.server` must use the current registered ModelMax MCP server name. Do not hardcode a stale alias. For 402 recovery, use the server value from the 402 directive.
+
 ## Merchant Payment Handoff Contract
 
 ### Payment Skill Dependency Boundary
@@ -120,7 +139,7 @@ You MUST NOT replace the merchant default with `1`, `5`, or any other arbitrary 
 
 ModelMax should drive its own merchant payment intent and hand off Clink execution to the runtime-specific payment skill. In OpenClaw, call `agent-payment-skills.clink_pay` directly.
 
-- The `merchant_integration.server` value MUST match the server name provided in the HTTP 402 Auto-Pay SYSTEM DIRECTIVE. Do NOT guess or hardcode this value.
+- The `merchant_integration.server` value MUST match the current registered ModelMax MCP server. In HTTP 402 auto-pay recovery, use the server name provided in the SYSTEM DIRECTIVE. In manual recharge, use the active ModelMax server name from the current runtime. Do NOT guess or hardcode this value.
 
 - For session-mode flows, pass:
   - `sessionId`
