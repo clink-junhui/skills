@@ -49,7 +49,8 @@ After installation, the agent will guide you through activation.
 git clone https://github.com/modelmaxio/skills.git
 cd skills
 cd skills/media-generation/scripts
-npx mcporter --config "${OPENCLAW_HOME:-$HOME}/.openclaw/config/mcporter.json" config add modelmax-media "node $(pwd)/index.bundle.mjs"
+mkdir -p "$HOME/.modelmax"
+npx mcporter --config "$HOME/.modelmax/mcporter.json" config add modelmax-media "node $(pwd)/index.bundle.mjs"
 ```
 
 `index.bundle.mjs` is already bundled in the repo, so `npm install` is not required for installation.
@@ -90,7 +91,7 @@ You need a ModelMax API key before using the skill.
 
 Send your ModelMax API key directly to the agent.
 
-### Local Skill Config
+### Local ModelMax Config
 
 From the installed skill directory (`~/.openclaw/workspace/skills/modelmax-media`), run:
 
@@ -98,9 +99,9 @@ From the installed skill directory (`~/.openclaw/workspace/skills/modelmax-media
 node scripts/set-api-key.mjs sk-xxxx
 ```
 
-This writes the key into `modelmax.config.json` inside the skill directory instead of `openclaw.json`.
+This writes the key into `~/.modelmax/config.json` instead of `openclaw.json`.
 
-`MODELMAX_AUTO_PAY` is also stored in the same local `modelmax.config.json`.
+`MODELMAX_AUTO_PAY` is also stored in the same local `~/.modelmax/config.json`.
 
 ### Environment Variable
 

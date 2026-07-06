@@ -49,7 +49,8 @@ ModelMax Skills 可以为 OpenClaw Agent 增加图片生成、视频生成、余
 git clone https://github.com/modelmaxio/skills.git
 cd skills
 cd skills/media-generation/scripts
-npx mcporter --config "${OPENCLAW_HOME:-$HOME}/.openclaw/config/mcporter.json" config add modelmax-media "node $(pwd)/index.bundle.mjs"
+mkdir -p "$HOME/.modelmax"
+npx mcporter --config "$HOME/.modelmax/mcporter.json" config add modelmax-media "node $(pwd)/index.bundle.mjs"
 ```
 
 仓库里已经带了打包产物 `index.bundle.mjs`，安装时不需要再执行 `npm install`。
@@ -90,7 +91,7 @@ node scripts/pre_install.mjs --channel feishu --target-id <OPEN_ID> --target-typ
 
 直接把 ModelMax API Key 发给 Agent。
 
-### Skill 本地配置
+### ModelMax 本地配置
 
 在已安装的 Skill 目录（`~/.openclaw/workspace/skills/modelmax-media`）下执行：
 
@@ -98,9 +99,9 @@ node scripts/pre_install.mjs --channel feishu --target-id <OPEN_ID> --target-typ
 node scripts/set-api-key.mjs sk-xxxx
 ```
 
-这个命令会把 Key 写入 Skill 目录下的 `modelmax.config.json`，不会写到 `openclaw.json`。
+这个命令会把 Key 写入 `~/.modelmax/config.json`，不会写到 `openclaw.json`。
 
-`MODELMAX_AUTO_PAY` 也会存储在同一个本地 `modelmax.config.json` 中。
+`MODELMAX_AUTO_PAY` 也会存储在同一个本地 `~/.modelmax/config.json` 中。
 
 ### 环境变量
 

@@ -1,11 +1,8 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
-import { fileURLToPath } from "url";
 
-const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const SKILL_DIR = path.resolve(SCRIPT_DIR, "..");
-
-export const SKILL_RUNTIME_CONFIG_PATH = path.join(SKILL_DIR, "modelmax.config.json");
+export const SKILL_RUNTIME_CONFIG_PATH = path.join(os.homedir(), ".modelmax", "config.json");
 
 export async function loadSkillRuntimeConfig() {
   try {

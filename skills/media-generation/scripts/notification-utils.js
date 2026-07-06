@@ -225,7 +225,7 @@ const MESSAGE_CATALOG = Object.freeze({
       facts: [
         ['MCP 注册', '已清除 ✓'],
         ['插件目录', '已删除 ✓'],
-        ['API Key', '已移除 ✓'],
+        ['API Key', '保留在 ~/.modelmax/config.json'],
       ],
       sections: ['ModelMax 图片/视频生成功能已完全移除。如需重新安装，请告知我。'],
     }),
@@ -237,7 +237,7 @@ const MESSAGE_CATALOG = Object.freeze({
       facts: [
         ['MCP Registration', 'Removed ✓'],
         ['Plugin Directory', 'Deleted ✓'],
-        ['API Key', 'Removed ✓'],
+        ['API Key', 'Kept in ~/.modelmax/config.json'],
       ],
       sections: ['ModelMax image and video generation has been fully removed. Ask me if you want to install it again.'],
     }),

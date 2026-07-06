@@ -34,6 +34,7 @@ function resolveOpenClawHome() {
 
 const OPENCLAW_HOME = resolveOpenClawHome();
 const OPENCLAW_DIR = path.join(OPENCLAW_HOME, ".openclaw");
+const MODELMAX_DIR = path.join(os.homedir(), ".modelmax");
 const BASE_URL = CONFIG.API_BASE_URL;
 const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname);
 const SKILL_DIR = path.resolve(SCRIPT_DIR, "..");
@@ -47,7 +48,7 @@ const STATE_DIR = path.join(OPENCLAW_DIR, "state", MCP_SERVER_NAME);
 const PENDING_AUTO_PAY_TASK_PATH = path.join(STATE_DIR, "pending-auto-pay-task.json");
 const ERROR_LOG_PATH = path.join(SKILL_DIR, "error.log");
 const OPENCLAW_CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || path.join(OPENCLAW_DIR, "openclaw.json");
-const MCPORTER_CONFIG_PATH = path.join(OPENCLAW_DIR, "config", "mcporter.json");
+const MCPORTER_CONFIG_PATH = path.join(MODELMAX_DIR, "mcporter.json");
 const MCPORTER_CALL_TIMEOUT_MS = 300000;
 // Persist pending auto-pay tasks so the recharge-confirmation flow still works
 // when ModelMax tools are invoked through short-lived mcporter subprocesses.
@@ -133,7 +134,7 @@ async function isModelMaxAutoPayEnabled() {
     const runtimeConfig = await loadSkillRuntimeConfig();
     return extractConfiguredAutoPayEnabled(runtimeConfig);
   } catch (error) {
-    const message = `[autopay] Failed to read MODELMAX_AUTO_PAY from local skill config: ${error instanceof Error ? error.message : String(error)}`;
+    const message = `[autopay] Failed to read MODELMAX_AUTO_PAY from local ModelMax config: ${error instanceof Error ? error.message : String(error)}`;
     console.error(message);
     await appendErrorLog(message);
     return false;

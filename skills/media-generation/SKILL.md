@@ -1,6 +1,6 @@
 ---
 name: modelmax-media
-description: "Generate images and videos via ModelMax APIs. CRITICAL RULES: (1) INSTALL NOTIFICATION MANDATE: The moment this skill finishes installing, you MUST send exactly one install success notification through `send-message.mjs` using the unified `message_key + vars` payload. (2) ACTIVATION ROUTING: If the user sends a ModelMax API key, including a bare message that starts with `sk-`, this skill MUST treat it as activation input, store it via the local skill config helper, fetch balance, and continue activation in the same turn. (3) MANDATORY TOOL USE: ALWAYS call generate_image and generate_video via mcporter with the explicit config path under `~/.openclaw/config/mcporter.json` (do NOT omit `--args`). NEVER use curl or direct API calls."
+description: "Generate images and videos via ModelMax APIs. CRITICAL RULES: (1) INSTALL NOTIFICATION MANDATE: The moment this skill finishes installing, you MUST send exactly one install success notification through `send-message.mjs` using the unified `message_key + vars` payload. (2) ACTIVATION ROUTING: If the user sends a ModelMax API key, including a bare message that starts with `sk-`, this skill MUST treat it as activation input, store it via the local ModelMax config helper, fetch balance, and continue activation in the same turn. (3) MANDATORY TOOL USE: ALWAYS call generate_image and generate_video via mcporter with the explicit config path under `~/.modelmax/mcporter.json` (do NOT omit `--args`). NEVER use curl or direct API calls."
 version: "1.0.0"
 related_skills:
   - openclaw-payment-skills
@@ -11,15 +11,15 @@ metadata:
     tools:
       notification_sender: "scripts/send-message.mjs"
       mcp_server: "scripts/index.bundle.mjs"
-    apiKeyStorage: "modelmax.config.json"
+    apiKeyStorage: "~/.modelmax/config.json"
 permissions:
   - network
   - system
 ---
 
-Local skill config storage:
+Local ModelMax config storage:
 
-- `MODELMAX_API_KEY` and `MODELMAX_AUTO_PAY` are stored in `~/.openclaw/workspace/skills/modelmax-media/modelmax.config.json`
+- `MODELMAX_API_KEY` and `MODELMAX_AUTO_PAY` are stored in `~/.modelmax/config.json`
 - Neither value is stored in `openclaw.json`
 
 # ModelMax MCP Server
@@ -29,7 +29,7 @@ Local skill config storage:
 > **ALWAYS call `generate_image` and `generate_video` via `npx mcporter --config "$MCPORTER_CONFIG_PATH" call`. Do NOT omit `--args`. For long-running media generation, ALWAYS pass `--timeout 300000` so mcporter does not hit its default 60s call timeout. NEVER use `curl`, `exec`, or any shell command to call the ModelMax API directly.**
 
 ```bash
-MCPORTER_CONFIG_PATH="${OPENCLAW_HOME:-$HOME}/.openclaw/config/mcporter.json"
+MCPORTER_CONFIG_PATH="$HOME/.modelmax/mcporter.json"
 
 # Use the currently registered ModelMax MCP server name from mcporter.
 # Do NOT hardcode a stale alias in payment handoff or tool calls.
@@ -228,7 +228,7 @@ When the user activates this skill, you MUST follow these steps in order:
      ```
    - If the tool returns `DIRECT_SEND`, do NOT send another activation/configuration notification.
    - After the tool succeeds, you may continue with a short natural-language reply.
-4. **Verify API Key:** Once the API Key is configured in the local skill config file (or if it is already present in the environment), you MUST immediately call `check_balance` with `send_card: false` (do NOT omit --args):
+4. **Verify API Key:** Once the API Key is configured in the local ModelMax config file (or if it is already present in the environment), you MUST immediately call `check_balance` with `send_card: false` (do NOT omit --args):
    ```
    npx mcporter --config "$MCPORTER_CONFIG_PATH" call --timeout 300000 <modelmax-server> check_balance --args '{"send_card":false}'
    ```
@@ -316,7 +316,7 @@ Tool behavior:
 - Removes the MCP registration for `modelmax-media`
 - Clears legacy skill config entries if present
 - Clears local pending ModelMax state
-- Deletes the local API key file stored at `~/.openclaw/workspace/skills/modelmax-media/modelmax.config.json` by deleting the skill directory last
+- Does not delete the user-level ModelMax config at `~/.modelmax/config.json`
 - Sends the uninstall confirmation notification directly when a notify target is provided
 - Deletes the skill directory LAST
 
