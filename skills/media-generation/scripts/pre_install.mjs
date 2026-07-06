@@ -6,18 +6,9 @@ import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createMessageRequest } from './notification-utils.js';
 
-function resolveOpenClawHome() {
-  const explicitHome = typeof process.env.OPENCLAW_HOME === 'string' ? process.env.OPENCLAW_HOME.trim() : '';
-  if (explicitHome && explicitHome !== 'undefined') {
-    return explicitHome;
-  }
-  return os.homedir();
-}
-
 const SKILL_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const OPENCLAW_HOME = resolveOpenClawHome();
-const OPENCLAW_DIR = path.join(OPENCLAW_HOME, '.openclaw');
-const MCPORTER_CONFIG_PATH = path.join(OPENCLAW_DIR, 'config', 'mcporter.json');
+const MODELMAX_DIR = path.join(os.homedir(), '.modelmax');
+const MCPORTER_CONFIG_PATH = path.join(MODELMAX_DIR, 'mcporter.json');
 const BUNDLE = path.join(SKILL_DIR, 'scripts', 'index.bundle.mjs');
 const MESSAGE_SENDER = path.join(SKILL_DIR, 'scripts', 'send-message.mjs');
 const LOG_PATH = path.join(SKILL_DIR, 'error.log');
@@ -110,6 +101,7 @@ try {
 
 console.log('Step 1: Registering MCP server...');
 try {
+  await fs.mkdir(path.dirname(MCPORTER_CONFIG_PATH), { recursive: true });
   execFileSync(
     'npx',
     [
