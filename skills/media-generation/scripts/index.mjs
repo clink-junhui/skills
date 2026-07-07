@@ -192,18 +192,12 @@ function normalizeNotifyTarget(args = {}) {
     : typeof args.user_locale === "string" && args.user_locale.trim()
       ? args.user_locale.trim()
       : null;
-  if ((typeof args.chat_id === "string" && args.chat_id.trim()) || (typeof args.open_id === "string" && args.open_id.trim())) {
-    throw new Error("chat_id/open_id are no longer supported. Use channel + target_id + target_type.");
-  }
   const hasAny = Boolean(channel || targetId || targetType);
   if (!hasAny) {
     return { channel: null, target: null };
   }
   if (!channel || !targetId || !targetType) {
     throw new Error("channel, target_id, and target_type must be provided together.");
-  }
-  if (channel === "feishu" && targetType !== "chat_id" && targetType !== "open_id") {
-    throw new Error('target_type must be "chat_id" or "open_id" for feishu.');
   }
   return { channel, target: { type: targetType, id: targetId }, ...(locale ? { locale } : {}) };
 }
@@ -239,9 +233,6 @@ function parsePaymentHandoff(args) {
   }
   if (!targetType) {
     throw new Error("payment_handoff.notify_target.type is required.");
-  }
-  if (channel === "feishu" && targetType !== "chat_id" && targetType !== "open_id") {
-    throw new Error('payment_handoff.notify_target.type must be "chat_id" or "open_id" for feishu.');
   }
   return {
     orderId,

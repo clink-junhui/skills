@@ -448,63 +448,6 @@ export function renderMessageTelegramText(input, options = {}) {
   return body.join('\n\n').trim();
 }
 
-export function renderMessageFeishuCard(input, options = {}) {
-  const model = input?.message_key ? compileMessage(input, options) : input;
-  const elements = [];
-  if (model.summary) {
-    elements.push({ tag: 'markdown', content: model.summary });
-  }
-  if (model.facts.length > 0) {
-    if (elements.length > 0) elements.push({ tag: 'hr' });
-    elements.push({
-      tag: 'markdown',
-      content: model.facts.map((fact) => `**${fact.label}**　${fact.value}`).join('\n'),
-    });
-  }
-  if (model.sections.length > 0) {
-    if (elements.length > 0) elements.push({ tag: 'hr' });
-    model.sections.forEach((section) => {
-      elements.push({ tag: 'markdown', content: section.text });
-    });
-  }
-  if (model.actions.length > 0) {
-    if (elements.length > 0) elements.push({ tag: 'hr' });
-    const passive = model.actions.filter((action) => action.type !== 'url' || !action.url);
-    if (passive.length > 0) {
-      elements.push({
-        tag: 'markdown',
-        content: passive.map((action) => `- ${action.label}`).join('\n'),
-      });
-    }
-    model.actions
-      .filter((action) => action.type === 'url' && action.url)
-      .forEach((action) => {
-        elements.push({
-          tag: 'button',
-          text: { tag: 'plain_text', content: action.label },
-          multi_url: {
-            url: action.url,
-            pc_url: action.url,
-            ios_url: action.url,
-            android_url: action.url,
-          },
-        });
-      });
-  }
-  if (model.footer) {
-    if (elements.length > 0) elements.push({ tag: 'hr' });
-    elements.push({ tag: 'markdown', content: model.footer });
-  }
-  return {
-    schema: '2.0',
-    header: {
-      title: { content: model.title || 'Notification', tag: 'plain_text' },
-      template: model.theme,
-    },
-    body: { elements },
-  };
-}
-
 export function renderMessageTelegramCard(input, options = {}) {
   const model = input?.message_key ? compileMessage(input, options) : input;
   return {
