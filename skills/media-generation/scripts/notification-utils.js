@@ -216,32 +216,6 @@ const MESSAGE_CATALOG = Object.freeze({
       sections: ['Auto top-up is active. When your balance runs low, Clink will recharge the account automatically to keep tasks running.'],
     }),
   }),
-  'uninstall.success': defineCatalogEntry({
-    'zh-CN': () => buildModel({
-      key: 'uninstall.success',
-      locale: 'zh-CN',
-      title: '🗑️ ModelMax Skill 已卸载',
-      theme: 'grey',
-      facts: [
-        ['MCP 注册', '已清除 ✓'],
-        ['插件目录', '已删除 ✓'],
-        ['API Key', '保留在 ~/.modelmax/config.json'],
-      ],
-      sections: ['ModelMax 图片/视频生成功能已完全移除。如需重新安装，请告知我。'],
-    }),
-    'en-US': () => buildModel({
-      key: 'uninstall.success',
-      locale: 'en-US',
-      title: '🗑️ ModelMax Skill Uninstalled',
-      theme: 'grey',
-      facts: [
-        ['MCP Registration', 'Removed ✓'],
-        ['Plugin Directory', 'Deleted ✓'],
-        ['API Key', 'Kept in ~/.modelmax/config.json'],
-      ],
-      sections: ['ModelMax image and video generation has been fully removed. Ask me if you want to install it again.'],
-    }),
-  }),
   'recharge.success': defineCatalogEntry({
     'zh-CN': (vars) => buildModel({
       key: 'recharge.success',
@@ -302,7 +276,7 @@ const MESSAGE_CATALOG = Object.freeze({
         ['订单号', vars.orderId],
         ['订单状态', '待确认'],
       ],
-      sections: ['60 秒内未收到到账确认，请前往 ModelMax 账户查看余额，或联系支持并提供以上订单号。'],
+      sections: ['5 分钟内未收到到账确认，请前往 ModelMax 账户查看余额，或联系支持并提供以上订单号。'],
       actions: [{ type: 'url', label: '联系支持', url: vars.supportUrl }],
     }),
     'en-US': (vars) => buildModel({
@@ -314,7 +288,7 @@ const MESSAGE_CATALOG = Object.freeze({
         ['Order ID', vars.orderId],
         ['Order Status', 'Pending confirmation'],
       ],
-      sections: ['No recharge confirmation arrived within 60 seconds. Check the ModelMax balance or contact support with the order ID above.'],
+      sections: ['No recharge confirmation arrived within 5 minutes. Check the ModelMax balance or contact support with the order ID above.'],
       actions: [{ type: 'url', label: 'Contact Support', url: vars.supportUrl }],
     }),
   }),

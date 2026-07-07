@@ -10,7 +10,6 @@ const SKILL_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const MODELMAX_DIR = path.join(os.homedir(), '.modelmax');
 const MCPORTER_CONFIG_PATH = path.join(MODELMAX_DIR, 'mcporter.json');
 const BUNDLE = path.join(SKILL_DIR, 'scripts', 'index.bundle.mjs');
-const MESSAGE_SENDER = path.join(SKILL_DIR, 'scripts', 'send-message.mjs');
 const LOG_PATH = path.join(SKILL_DIR, 'error.log');
 
 function parseNotifyDestination(argv) {
@@ -48,7 +47,7 @@ function parseNotifyDestination(argv) {
   }
 
   if (!channel && !targetId && !targetType) {
-    throw new Error('A notify target is required. Use --channel, --target-id, and --target-type.');
+    return { channel: null, target: null, ...(locale ? { locale } : {}) };
   }
   if (!channel || !targetId || !targetType) {
     throw new Error('--channel, --target-id, and --target-type must be provided together.');
@@ -73,22 +72,26 @@ async function logInstallError(message) {
   } catch {}
 }
 
-async function sendInstallNotification(notifyDestination) {
-  const payload = {
+function buildInstallNotification(notifyDestination) {
+  const messageRequest = createMessageRequest({ messageKey: 'install.success' });
+  if (!notifyDestination.channel) {
+    return messageRequest;
+  }
+  return {
     channel: notifyDestination.channel,
     target: {
       ...notifyDestination.target,
       ...(notifyDestination.locale ? { locale: notifyDestination.locale } : {}),
     },
-    deliver: true,
-    ...createMessageRequest({ messageKey: 'install.success' }),
+    ...messageRequest,
   };
+}
 
-  execFileSync(
-    process.execPath,
-    [MESSAGE_SENDER, '--payload', JSON.stringify(payload)],
-    { stdio: 'inherit' },
-  );
+function logCapturedOutput(label, value) {
+  const text = Buffer.isBuffer(value) ? value.toString('utf8') : String(value || '');
+  if (text.trim()) {
+    console.error(`${label}:\n${text.trim()}`);
+  }
 }
 
 let notifyDestination;
@@ -99,10 +102,10 @@ try {
   process.exit(1);
 }
 
-console.log('Step 1: Registering MCP server...');
+console.error('Step 1: Registering MCP server...');
 try {
   await fs.mkdir(path.dirname(MCPORTER_CONFIG_PATH), { recursive: true });
-  execFileSync(
+  const output = execFileSync(
     'npx',
     [
       'mcporter',
@@ -113,23 +116,21 @@ try {
       'modelmax-media',
       `node ${BUNDLE}`,
     ],
-    { stdio: 'inherit' },
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
   );
-  console.log('  ✅ Registered via npx mcporter');
+  logCapturedOutput('mcporter', output);
+  console.error('  Registered via npx mcporter');
 } catch (error) {
-  console.error('  ❌ MCP registration failed:', error.message);
+  logCapturedOutput('mcporter stdout', error.stdout);
+  logCapturedOutput('mcporter stderr', error.stderr);
+  console.error('  MCP registration failed:', error.message);
   await logInstallError(`mcporter config add failed: ${error.message}`);
   process.exit(1);
 }
 
-console.log('Step 2: Sending install notification...');
-try {
-  await sendInstallNotification(notifyDestination);
-  console.log('  ✅ Install notification sent');
-} catch (error) {
-  console.error('  ❌ Install notification failed:', error.message);
-  await logInstallError(`install notification failed: ${error.message}`);
-  process.exit(1);
-}
-
-console.log('\nPre-install complete.');
+console.error('Step 2: Returning install notification payload...');
+process.stdout.write(`${JSON.stringify({
+  status: 'success',
+  notification: buildInstallNotification(notifyDestination),
+}, null, 2)}\n`);
+console.error('Pre-install complete.');

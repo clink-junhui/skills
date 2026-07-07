@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-ModelMax Skills 可以为 OpenClaw Agent 增加图片生成、视频生成、余额查询和可选的自动充值能力。
+ModelMax Skills 可以为支持通过 mcporter 调用 MCP 工具的 Agent 增加图片生成、视频生成、余额查询和可选的自动充值能力。
 
 ---
 
@@ -55,12 +55,12 @@ npx mcporter --config "$HOME/.modelmax/mcporter.json" config add modelmax-media 
 
 仓库里已经带了打包产物 `index.bundle.mjs`，安装时不需要再执行 `npm install`。
 
-### Installation for OpenClaw
+### Agent 托管安装
 
-如果你是给 OpenClaw 安装，请把 Skill 放到 OpenClaw 托管的 `skills` 目录下，不要把整个仓库直接 clone 到 `~/.openclaw/workspace`：
+如果你的 Agent 会托管 Skill，请只把 `skills/media-generation` 复制到该 Agent 自己的 skill 目录，然后在安装后的 skill 目录里运行预安装脚本。具体 skill 目录由当前 Agent 决定。
 
 ```bash
-TARGET_DIR="${OPENCLAW_HOME:-$HOME}/.openclaw/workspace/skills/modelmax-media"
+TARGET_DIR="$HOME/.modelmax/workspace/skills/modelmax-media"
 
 mkdir -p "$(dirname "$TARGET_DIR")"
 rm -rf "$TARGET_DIR"
@@ -70,16 +70,9 @@ cd "$TARGET_DIR"
 node scripts/pre_install.mjs --channel <CHANNEL> --target-id <TARGET_ID> --target-type <TARGET_TYPE>
 ```
 
-不要把整个仓库直接 clone 到 `~/.openclaw/workspace/`。对于 OpenClaw，只应把 `skills/media-generation` 复制到 `~/.openclaw/workspace/skills/modelmax-media`。
+不要把整个仓库直接 clone 到 Agent workspace。只复制 `skills/media-generation` 这个 skill 目录。
 
-如果是飞书，请使用以下其中一种：
-
-```bash
-node scripts/pre_install.mjs --channel feishu --target-id <CHAT_ID> --target-type chat_id
-node scripts/pre_install.mjs --channel feishu --target-id <OPEN_ID> --target-type open_id
-```
-
-`pre_install.mjs` 会立即完成 MCP 注册并发送安装成功通知，不会等待后续的重启成功卡片。
+`--channel`、`--target-id`、`--target-type` 是可选的路由提示。`pre_install.mjs` 会完成 MCP 注册，并只在 stdout 输出安装成功通知 JSON payload。当前 agent/runtime 应使用自己的消息能力发送该 payload。
 
 ---
 
@@ -93,13 +86,13 @@ node scripts/pre_install.mjs --channel feishu --target-id <OPEN_ID> --target-typ
 
 ### ModelMax 本地配置
 
-在已安装的 Skill 目录（`~/.openclaw/workspace/skills/modelmax-media`）下执行：
+在已安装的 Skill 目录下执行：
 
 ```bash
 node scripts/set-api-key.mjs sk-xxxx
 ```
 
-这个命令会把 Key 写入 `~/.modelmax/config.json`，不会写到 `openclaw.json`。
+这个命令会把 Key 写入 `~/.modelmax/config.json`。
 
 `MODELMAX_AUTO_PAY` 也会存储在同一个本地 `~/.modelmax/config.json` 中。
 
@@ -115,7 +108,7 @@ export MODELMAX_API_KEY="sk-xxxx"
 
 自动充值依赖：
 
-- [agent-payment-skills](https://github.com/clinkbillcom/agent-payment-skills)
+- 当前 Agent/runtime 暴露的 Clink 支付能力，例如 `agent-payment-skills` MCP server 或 `clink-payment-skill` CLI workflow
 
 开启后，当余额不足时，Agent 可以自动完成充值并继续原来的生成任务。
 
@@ -165,7 +158,8 @@ export MODELMAX_API_KEY="sk-xxxx"
 
 ## 兼容环境
 
-- OpenClaw
+- 任何可以通过 mcporter 注册并调用 MCP 工具的 Agent/runtime
+- 通知 payload 发送和生成文件投递由当前 Agent/runtime 自己负责
 
 ---
 
