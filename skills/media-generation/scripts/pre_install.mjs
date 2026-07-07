@@ -52,9 +52,6 @@ function parseNotifyDestination(argv) {
   if (!channel || !targetId || !targetType) {
     throw new Error('--channel, --target-id, and --target-type must be provided together.');
   }
-  if (channel === 'feishu' && targetType !== 'chat_id' && targetType !== 'open_id') {
-    throw new Error('--target-type must be "chat_id" or "open_id" when --channel feishu is used.');
-  }
   return {
     channel,
     target: {
