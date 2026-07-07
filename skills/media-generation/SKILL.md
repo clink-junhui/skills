@@ -1,15 +1,13 @@
 ---
 name: modelmax-media
-description: "Generate images and videos via ModelMax APIs. CRITICAL RULES: (1) INSTALL NOTIFICATION MANDATE: The moment this skill finishes installing, you MUST send exactly one install success notification through `send-message.mjs` using the unified `message_key + vars` payload. (2) ACTIVATION ROUTING: If the user sends a ModelMax API key, including a bare message that starts with `sk-`, this skill MUST treat it as activation input, store it via the local ModelMax config helper, fetch balance, and continue activation in the same turn. (3) MANDATORY TOOL USE: ALWAYS call generate_image and generate_video via mcporter with the explicit config path under `~/.modelmax/mcporter.json` (do NOT omit `--args`). NEVER use curl or direct API calls."
+description: "Generate images and videos via ModelMax APIs. CRITICAL RULES: (1) INSTALL NOTIFICATION MANDATE: After installation, the agent MUST send exactly one install success notification using the returned unified `message_key + vars` payload. (2) ACTIVATION ROUTING: If the user sends a ModelMax API key, including a bare message that starts with `sk-`, this skill MUST treat it as activation input, store it via the local ModelMax config helper, fetch balance, and continue activation in the same turn. (3) MANDATORY TOOL USE: ALWAYS call generate_image and generate_video via mcporter with the explicit config path under `~/.modelmax/mcporter.json` (do NOT omit `--args`). NEVER use curl or direct API calls."
 version: "1.0.0"
 related_skills:
-  - openclaw-payment-skills
   - clink-payment-skill
 metadata:
-  openclaw:
+  modelmax:
     scriptsDir: "scripts"
     tools:
-      notification_sender: "scripts/send-message.mjs"
       mcp_server: "scripts/index.bundle.mjs"
     apiKeyStorage: "~/.modelmax/config.json"
 permissions:
@@ -20,13 +18,13 @@ permissions:
 Local ModelMax config storage:
 
 - `MODELMAX_API_KEY` and `MODELMAX_AUTO_PAY` are stored in `~/.modelmax/config.json`
-- Neither value is stored in `openclaw.json`
+- Neither value is stored in any agent/runtime-specific config file
 
 # ModelMax MCP Server
 
 ## 🚫 ALWAYS USE mcporter — NEVER CALL API DIRECTLY
 
-> **ALWAYS call `generate_image` and `generate_video` via `npx mcporter --config "$MCPORTER_CONFIG_PATH" call`. Do NOT omit `--args`. For long-running media generation, ALWAYS pass `--timeout 300000` so mcporter does not hit its default 60s call timeout. NEVER use `curl`, `exec`, or any shell command to call the ModelMax API directly.**
+> **ALWAYS call `generate_image` and `generate_video` via `npx mcporter --config "$MCPORTER_CONFIG_PATH" call`. Do NOT omit `--args`. For long-running media generation and recharge confirmation, ALWAYS pass `--timeout 360000` so mcporter does not hit its default 60s call timeout. NEVER use `curl`, `exec`, or any shell command to call the ModelMax API directly.**
 
 ```bash
 MCPORTER_CONFIG_PATH="$HOME/.modelmax/mcporter.json"
@@ -35,17 +33,17 @@ MCPORTER_CONFIG_PATH="$HOME/.modelmax/mcporter.json"
 # Do NOT hardcode a stale alias in payment handoff or tool calls.
 
 # Generate image
-npx mcporter --config "$MCPORTER_CONFIG_PATH" call --timeout 300000 <modelmax-server> generate_image --args '{"prompt":"<PROMPT>","channel":"feishu","target_id":"<CHAT_ID>","target_type":"chat_id"}'
+npx mcporter --config "$MCPORTER_CONFIG_PATH" call --timeout 360000 <modelmax-server> generate_image --args '{"prompt":"<PROMPT>"}'
 
 # Generate video
-npx mcporter --config "$MCPORTER_CONFIG_PATH" call --timeout 300000 <modelmax-server> generate_video --args '{"prompt":"<PROMPT>","resolution":"720p","duration_seconds":5,"channel":"feishu","target_id":"<CHAT_ID>","target_type":"chat_id"}'
+npx mcporter --config "$MCPORTER_CONFIG_PATH" call --timeout 360000 <modelmax-server> generate_video --args '{"prompt":"<PROMPT>","resolution":"720p","duration_seconds":5}'
 ```
 
 Note: 1080p and 4k resolution videos MUST use `duration_seconds: 8`.
 
-Note: `mcporter call` defaults to a 60s timeout. Use `--timeout 300000` for ModelMax media generation so video polling can finish.
+Note: `mcporter call` defaults to a 60s timeout. Use `--timeout 360000` for ModelMax media generation and recharge confirmation so polling can finish.
 
-After sending a notification or media item, you may continue with a short natural-language reply when the surrounding workflow needs it. Prefer `DIRECT_SEND` for direct-delivery success paths.
+After a media generation tool returns a local file path, use the current agent/runtime's own file or media sending tool to deliver that file to the user.
 
 ## Card Ownership Matrix (Hard Rule)
 
@@ -53,44 +51,44 @@ Exactly one layer owns each semantic card. Do NOT duplicate card delivery.
 
 | Event | Owner | Required behavior |
 |---|---|---|
-| Install complete | pre_install.mjs | Registers MCP and sends exactly one install success notification |
-| API key activation summary | modelmax tool | `activate_api_key` owns the single configuration/auto-pay prompt notification |
+| Install complete | pre_install.mjs | Registers MCP and returns the install success notification payload; agent owns delivery |
+| API key activation summary | modelmax tool | `activate_api_key` returns the single configuration/auto-pay prompt notification payload; agent owns delivery |
 | Balance check with `send_card:false` | tool | Returns data only; agent must decide the next notification |
 | Payment-layer `✅ Payment Successful` | payment skill | ModelMax skill MUST NOT send another payment-success notification |
-| `check_recharge_status` credited/paid | modelmax tool | Tool owns `✅ Recharge Successful` and pending-task resume |
-| `check_recharge_status` failed/refunded | modelmax tool | Tool owns `❌ Recharge Failed` |
-| Generated image/video delivery | modelmax tool + `send-message.mjs` | Tool delivers directly through the unified sender |
+| `check_recharge_status` credited/paid | modelmax tool | Tool polls ModelMax, returns `✅ Recharge Successful` notification payload, resumes the pending task, and includes `resumed_task.result.path` when media was generated |
+| `check_recharge_status` failed/refunded | modelmax tool | Tool polls ModelMax and returns `❌ Recharge Failed` notification payload |
+| Generated image/video result | modelmax tool | Tool returns the local file path under `~/.modelmax/tmp`; the current agent/runtime owns delivery |
 
 ## Install Authorization Rule (Hard Rule)
 
 - User requests to install this skill counts as installation authorization.
-- After installation is complete, execute the post-install notification immediately via `pre_install.mjs` or `send-message.mjs`.
+- After installation is complete, send the post-install notification using the payload returned by `pre_install.mjs`.
 - Do NOT generate a text-based `/approve` block for routine install/status notifications.
 
 ## Merchant Result Ownership (Hard Rule)
 
-For ModelMax, `check_recharge_status` is the only owner of merchant-layer recharge result notifications.
+For ModelMax, `check_recharge_status` is the only owner of merchant-layer recharge result notification payloads.
 
-- No other layer may send `✅ Recharge Successful` for the same `order_id`.
-- No other layer may send `❌ Recharge Failed` for the same `order_id`.
+- No other layer may create `✅ Recharge Successful` for the same `order_id`.
+- No other layer may create `❌ Recharge Failed` for the same `order_id`.
 - Payment-layer `✅ Payment Successful` belongs to the payment skill, not ModelMax.
 
 ## Tool Return Contract (Hard Rule)
 
-- `DIRECT_SEND`
-  - Meaning: the tool already sent the notification/media
-  - Agent MUST NOT send a duplicate semantic-equivalent notification/media
-- `EXEC_REQUIRED`
-  - Meaning: the tool returned an explicit exec command
-  - Agent MUST execute it exactly once
 - `DATA_ONLY`
   - Meaning: the tool returned data only
   - Agent may send the next required notification defined by this skill
+- Notification payload JSON
+  - Meaning: the tool returned `{"notification": {"message_key": "...", "vars": {...}}}`
+  - Agent MUST use its own runtime-specific messaging capability to deliver the notification exactly once
+- Media path JSON
+  - Meaning: `generate_image` / `generate_video` returned `{"status":"success","type":"image|video","path":"..."}`
+  - Agent MUST use its own runtime-specific file or media sending capability to deliver the file at `path` to the user
 
 ## Prohibited Behaviors (Hard Rule)
 
 - Do NOT send `✅ Recharge Successful` before `check_recharge_status` confirms `credited=true` or `status=paid`.
-- Do NOT send a second `✅ Recharge Successful` or `❌ Recharge Failed` notification for the same `order_id`.
+- Do NOT create or send a second `✅ Recharge Successful` or `❌ Recharge Failed` notification for the same `order_id`.
 - Do NOT send a payment-layer `✅ Payment Successful` notification from ModelMax; that belongs to the payment skill.
 - Do NOT infer recovery state from chat memory when `pending-auto-pay-task.json` or tool output is available.
 - Do NOT paraphrase the full notification contents after the notification is already sent.
@@ -123,11 +121,11 @@ When the user explicitly asks to recharge ModelMax, for example "我要给 Model
      - If no payment method is available, run `clink-cli card binding-link --format json`, surface the binding URL, and wait for `payment_method.added` before restarting the readiness gate.
      - If the selected/default method is Visa, run `clink-cli instruction list --valid-only --payment-instrument-id <PAYMENT_INSTRUMENT_ID> --format json`; if no matching ACTIVE instruction+mandate covers the selected ModelMax amount/currency, run `clink-cli instruction create` with the Apple Park no-shipping placeholder address, wait for `purchase_instruction.activated`, then re-list and select the matching `instruction_id` + `mandate_id`.
      - If the selected/default method is not Visa, do not run instruction commands; continue to direct pay after merchant info is known.
-   - OpenClaw `agent-payment-skills`: use the payment skill's readiness/authorization flow. If it returns `state=INSTRUCTION_WORKFLOW_REQUIRED`, stop and wait for the payment skill's resume flow; ModelMax must not provide `instruction_id` or `mandate_id` itself.
+   - Runtime exposing `agent-payment-skills`: use that payment skill's readiness/authorization flow. If it returns `state=INSTRUCTION_WORKFLOW_REQUIRED`, stop and wait for the payment skill's resume flow; ModelMax must not provide `instruction_id` or `mandate_id` itself.
 4. Call `get_payment_config` to fetch the fresh `merchant_id`, `default_amount`, and `currency` if it was not already called in step 2.
 5. Call the runtime-specific pay path with `merchant_id`, selected `amount`, selected `currency`, `fulfillmentType: "NO_SHIPPING_REQUIRED"`, `merchantName: "ModelMax"`, ModelMax Credits `products`, matching `mandates`, and `merchant_integration.confirm_tool: "check_recharge_status"`.
    - Generic `clink-payment-skill`: run `clink-cli pay --merchant-id <MERCHANT_ID> --amount <AMOUNT> --currency <CURRENCY> --format json`; for Visa/VIC include the matched `--payment-instrument-id`, `--instruction-id`, `--mandate-id`, Apple Park no-shipping placeholder `--shipping-address`, and `--products`.
-   - OpenClaw: call `agent-payment-skills.clink_pay` with the full payload; do not call it with only merchant/session identifiers.
+   - Runtime exposing `agent-payment-skills`: call `agent-payment-skills.clink_pay` with the full payload; do not call it with only merchant/session identifiers.
    - The ModelMax Credits product is fixed as `productId: "modelmax-credits"` and `productName: "ModelMax Credits"`.
    - Set `quantity: 1`.
    - Set `unitPrice: selected amount`, where selected amount is the explicit user recharge amount when present, otherwise `default_amount`.
@@ -140,24 +138,24 @@ For manual recharge, `merchant_integration.server` must use the current register
 
 ### Payment Skill Dependency Boundary
 
-- OpenClaw runtime depends on `openclaw-payment-skills`; its registered MCP server name is `agent-payment-skills`, so OpenClaw payment calls use `agent-payment-skills.<tool>`.
-- Non-OpenClaw runtime depends on the `agentic-payment-skills` repository, whose skill name is `clink-payment-skill`; use that skill's invocation surface for generic agent payment execution.
-- Do not treat `openclaw-payment-skills` and `agentic-payment-skills` as competing runtime servers in the same environment. Select exactly one payment dependency by runtime first, then let that payment skill own the Clink FSM.
+- ModelMax does not inspect or assume payment-skill filesystem installation paths. Different agents install dependency skills in different locations.
+- Select the payment interface exposed by the current runtime, then let that payment skill own wallet readiness, card binding, authorization matching, pay execution, async payment events, and payment handoff.
+- If the runtime exposes an `agent-payment-skills` MCP server, use its MCP tools such as `agent-payment-skills.pre_check_account` and `agent-payment-skills.clink_pay`.
+- If the runtime uses `clink-payment-skill`, execute the real `clink-cli` commands as state transitions.
+- If neither payment interface is available, follow the current agent/runtime's normal dependency setup flow. Do not choose or validate a filesystem location from ModelMax.
 
-ModelMax should drive its own merchant payment intent and hand off Clink execution to the runtime-specific payment skill. In OpenClaw, call `agent-payment-skills.clink_pay` directly.
+ModelMax should drive its own merchant payment intent and hand off Clink execution to the runtime-specific payment skill.
 
 - The `merchant_integration.server` value MUST match the current registered ModelMax MCP server. In HTTP 402 auto-pay recovery, use the server name provided in the SYSTEM DIRECTIVE. In manual recharge, use the active ModelMax server name from the current runtime. Do NOT guess or hardcode this value.
 
-- Runtime-specific payment commands:
-  - OpenClaw runtime uses MCP tools exposed by `agent-payment-skills`, including `agent-payment-skills.pre_check_account` for readiness and `agent-payment-skills.clink_pay` for pay / instruction workflow handoff.
-  - Generic `agentic-payment-skills` runtime does not define `pre_check_account` or `clink_pay` tool names. Use `clink-payment-skill` by executing the real CLI commands as state transitions, not as a blind linear shell script:
-    - readiness: `clink-cli card binding-link --no-watch --format json`
-    - authorization lookup: `clink-cli instruction list --valid-only --payment-instrument-id <PAYMENT_INSTRUMENT_ID> --format json`
-    - authorization creation when no match exists: `clink-cli instruction create ... --shipping-address '{"name":"Clink User","line1":"One Apple Park Way","city":"Cupertino","state":"CA","zip":"95014","countryCode":"US","deliveryContactDetails":{}}' --format json`, then wait for `clink-cli events poll --type purchase_instruction.activated --format json`
-    - direct pay: `clink-cli pay --merchant-id <MERCHANT_ID> --amount <AMOUNT> --currency <CURRENCY> --format json`
-    - session pay: `clink-cli pay --session-id <SESSION_ID> --format json`
-    - async payment success wait, when pay returns a redirect or pending async handoff: `clink-cli events poll --type agent_order.succeeded --format json`
-    - Visa/VIC pay must additionally include the matched `--payment-instrument-id`, `--instruction-id`, `--mandate-id`, Apple Park no-shipping `--shipping-address`, and ModelMax Credits `--products`.
+- `clink-payment-skill` CLI state transitions:
+  - readiness: `clink-cli card binding-link --no-watch --format json`
+  - authorization lookup: `clink-cli instruction list --valid-only --payment-instrument-id <PAYMENT_INSTRUMENT_ID> --format json`
+  - authorization creation when no match exists: `clink-cli instruction create ... --shipping-address '{"name":"Clink User","line1":"One Apple Park Way","city":"Cupertino","state":"CA","zip":"95014","countryCode":"US","deliveryContactDetails":{}}' --format json`, then wait for `clink-cli events poll --type purchase_instruction.activated --format json`
+  - direct pay: `clink-cli pay --merchant-id <MERCHANT_ID> --amount <AMOUNT> --currency <CURRENCY> --format json`
+  - session pay: `clink-cli pay --session-id <SESSION_ID> --format json`
+  - async payment success wait, when pay returns a redirect or pending async handoff: `clink-cli events poll --type agent_order.succeeded --format json`
+  - Visa/VIC pay must additionally include the matched `--payment-instrument-id`, `--instruction-id`, `--mandate-id`, Apple Park no-shipping `--shipping-address`, and ModelMax Credits `--products`.
 
 - For session-mode flows, pass:
   - `sessionId`
@@ -183,23 +181,15 @@ If `agent-payment-skills.clink_pay` returns `state=INSTRUCTION_WORKFLOW_REQUIRED
 
 ## Sending Notifications
 
-This skill includes a standalone notification sender:
+This skill does not include a notification sender. When a tool returns a `notification` payload, the current agent/runtime must use its own messaging capability to deliver it.
 
-```bash
-# Send a localized notification payload
-node {SKILL_DIR}/scripts/send-message.mjs --payload '{"channel":"feishu","target":{"type":"chat_id","id":"oc_xxx","locale":"zh-CN"},"message_key":"install.success","vars":{}}'
-
-# Send the same semantic notification to another channel
-node {SKILL_DIR}/scripts/send-message.mjs --payload '{"channel":"telegram","target":{"type":"target_id","id":"12345","locale":"en-US"},"message_key":"install.success","vars":{}}'
-```
-
-The sender renders Feishu cards for Feishu, rich Telegram text/media for Telegram, and Markdown/text fallback for other channels.
+Do not use ModelMax media generation tools as a message transport. They only create local artifacts.
 
 ## Features
 
-- `activate_api_key`: Saves the pasted ModelMax API key, verifies it immediately, and sends the activation summary notification directly when the notify target is provided.
-- `generate_image`: Generates an image using ModelMax and delivers it directly through `send-message.mjs`.
-- `generate_video`: Generates a video using ModelMax and delivers it directly through `send-message.mjs`.
+- `activate_api_key`: Saves the pasted ModelMax API key, verifies it immediately, and returns the activation summary notification payload.
+- `generate_image`: Generates an image using ModelMax, saves it under `~/.modelmax/tmp`, and returns the local file path.
+- `generate_video`: Generates a video using ModelMax, saves it under `~/.modelmax/tmp`, and returns the local file path.
 - `get_payment_config`: Retrieves the ModelMax payment config: `merchant_id`, `default_amount`, and `currency`.
 - `check_balance`: Checks your current ModelMax API balance.
 
@@ -208,34 +198,35 @@ The sender renders Feishu cards for Feishu, rich Telegram text/media for Telegra
 Do not duplicate installation steps in this file. When the user asks to install this skill, follow `README.md` / `README-zh.md` only:
 
 - Use `Manual Install` for standalone repo installs.
-- Use `Installation for OpenClaw` for OpenClaw-managed installs.
+- Use `Agent-Managed Install` for agent-managed skill directories.
 - Do not substitute a partial MCP-only setup for the documented install flow.
 
 ### 1. Initialization & Setup
 When the user activates this skill, you MUST follow these steps in order:
 
 1. **Send install success notification immediately after the documented install flow succeeds:**
-   - For OpenClaw-managed installs, prefer `scripts/pre_install.mjs`; it registers the MCP server and sends the install success notification directly.
-   - All channels should use the unified `message_key` payload: `{"message_key":"install.success","vars":{}}`.
+   - For agent-managed installs, prefer `scripts/pre_install.mjs`; it registers the MCP server and returns the install success notification payload as JSON on stdout.
+   - `--channel`, `--target-id`, and `--target-type` are optional routing hints; if omitted, the tool still returns the unified `message_key` payload for the current agent/runtime to route.
+   - Send the returned unified `message_key` payload exactly once using the current agent/runtime's own messaging capability.
    - Do not delay the install notification waiting for any later restart/status callback.
    - After sending the notification, you may continue with a short natural-language reply.
 
 2. **Request API Key:** Wait for the user to provide their ModelMax API Key. Guide them to [ModelMax](https://www.modelmax.io/dashboard/keys) if they don't have one.
 3. **Handle pasted API Key immediately:** If the user's next message looks like a ModelMax API key (for example starts with `sk-`), you MUST treat it as the activation payload and continue the flow in the same turn. Do NOT stop after acknowledging receipt.
-   - First run `activate_api_key` and pass the current notify target so the tool can send the activation summary directly:
+   - First run `activate_api_key`:
      ```bash
-     npx mcporter --config "$MCPORTER_CONFIG_PATH" call --timeout 300000 <modelmax-server> activate_api_key --args '{"api_key":"<PASTED_KEY>","channel":"<CHANNEL>","target_id":"<TARGET_ID>","target_type":"<TARGET_TYPE>"}'
+     npx mcporter --config "$MCPORTER_CONFIG_PATH" call --timeout 360000 <modelmax-server> activate_api_key --args '{"api_key":"<PASTED_KEY>","channel":"<CHANNEL>","target_id":"<TARGET_ID>","target_type":"<TARGET_TYPE>"}'
      ```
-   - If the tool returns `DIRECT_SEND`, do NOT send another activation/configuration notification.
-   - After the tool succeeds, you may continue with a short natural-language reply.
+   - If the tool returns a `notification` payload, send it exactly once using the current agent/runtime's own messaging capability.
+   - After the notification is sent, you may continue with a short natural-language reply.
 4. **Verify API Key:** Once the API Key is configured in the local ModelMax config file (or if it is already present in the environment), you MUST immediately call `check_balance` with `send_card: false` (do NOT omit --args):
    ```
-   npx mcporter --config "$MCPORTER_CONFIG_PATH" call --timeout 300000 <modelmax-server> check_balance --args '{"send_card":false}'
+   npx mcporter --config "$MCPORTER_CONFIG_PATH" call --timeout 360000 <modelmax-server> check_balance --args '{"send_card":false}'
    ```
    If `check_balance` returns an error, inform the user to re-check their API key.
 
 ### 2. Automatic Top-Up Configuration
-If you are in the pasted-key activation path, `activate_api_key` already owns and sends the activation summary notification. Use the rules below only when you are verifying an already-configured key via `check_balance` with `send_card:false`.
+If you are in the pasted-key activation path, `activate_api_key` already returns the activation summary notification payload. Use the rules below only when you are verifying an already-configured key via `check_balance` with `send_card:false`.
 
 #### Routing Boundary Rule (Hard Rule)
 
@@ -246,36 +237,28 @@ Route generic auto-top-up language by active merchant context, not by keyword al
 - Call or install `agent-payment-skills` only as a dependency for wallet/payment setup, then resume the ModelMax flow immediately after that dependency work completes.
 - If the user explicitly asks for Clink setup, payment wallet setup, card binding, or payment-method management as the primary intent, that infrastructure request may belong to `agent-payment-skills` instead of ModelMax.
 
-**Any channel — send the unified semantic payload:**
-```bash
-node {SKILL_DIR}/scripts/send-message.mjs --payload '{"channel":"<CHANNEL>","target":{"type":"<TARGET_TYPE>","id":"<TARGET_ID>","locale":"<LOCALE>"},"message_key":"config.verified","vars":{"balance":"<BALANCE>","autoPayEnabled":false}}'
-```
+**Any channel — send the unified semantic payload with the current agent/runtime's own messaging capability.**
 
-`check_balance` supports a `send_card` parameter. During activation, you MUST call it with `{"send_card":false}` so it only returns balance data and does not end the turn early. For normal user-facing balance checks, omit the parameter and let it send the standard balance notification.
+`check_balance` supports a `send_card` parameter. During activation, you MUST call it with `{"send_card":false}` so it only returns balance data and does not end the turn early. For normal user-facing balance checks, omit the parameter and send the returned notification payload with the current agent/runtime's own messaging capability.
 
 Important:
 - `send_card:false` means `DATA_ONLY`
 - When `send_card:false`, `check_balance` MUST NOT send any balance notification
 - In that mode, the agent owns the next configuration notification
-- In normal balance-check mode, if the tool direct-sends the balance notification, the agent MUST NOT send a second balance notification
+- In normal balance-check mode, if the tool returns a `notification` payload, send it exactly once
 
 **Default behavior: do NOT enable auto-pay.** Only proceed if the user explicitly asks to enable auto top-up in the current turn. Match semantic intent in the user's language; do NOT require the exact text "Enable auto top-up".
 
 **If the user explicitly asks to enable auto top-up** (for example, "Enable auto top-up", "开启自动充值", or equivalent wording in their language):
-1. **MANDATORY CHECK**: You MUST execute the `exec` tool with the command `ls -la ~/.openclaw/workspace/skills/agent-payment-skills` to physically verify if the payment skill is installed. DO NOT rely on your conversation memory.
-2. **If the directory DOES NOT exist**:
-   - Treat the user's explicit auto top-up request as explicit authorization to install the missing dependency skill immediately.
-   - Do NOT stop at a missing-skill warning or an install URL notification.
-   - Immediately download/install `agent-payment-skills` and initiate its installation flow.
-   - Note that installation involves a gateway restart. After the restart completes and the user finishes the wallet initialization and card binding (which will span across multiple conversation turns), you MUST inject this context update into the current flow before proceeding: `agent-payment-skills is now installed and initialized for this user; wallet and card setup completed; resume the pending auto-pay configuration flow now.`
-   - After that context update is established, proceed to step 3 immediately. Do NOT restart the install check loop.
-3. **If the directory EXISTS** (or after it has been successfully installed and initialized per step 2):
-   - Call `agent-payment-skills.pre_check_account` (do NOT omit --args):
+1. **MANDATORY CHECK**: Verify payment readiness through the current runtime's payment interface. Do NOT inspect or assume any physical skill installation path; different agents install dependency skills in different locations.
+2. **Runtime exposing `agent-payment-skills`**: call `agent-payment-skills.pre_check_account` (do NOT omit --args):
      ```
-     npx mcporter --config "$MCPORTER_CONFIG_PATH" call --timeout 300000 agent-payment-skills pre_check_account --args '{}'
+     npx mcporter --config "$MCPORTER_CONFIG_PATH" call --timeout 360000 agent-payment-skills pre_check_account --args '{}'
      ```
-   - **If pre_check_account fails** (wallet not initialized or no card bound): Follow the `agent-payment-skills` initialization instructions to fix the issue (initialize wallet / bind card) before proceeding. DO NOT enable auto top-up until pre-check passes.
-   - **If pre_check_account passes**: IMMEDIATELY use the `exec` tool to run: `node {SKILL_DIR}/scripts/set-auto-pay.mjs true`
+   - If the call fails because the payment dependency is unavailable, treat the user's explicit auto top-up request as authorization to run the current agent/runtime's normal dependency setup flow for `agent-payment-skills`. Do not choose or validate a filesystem location from ModelMax.
+   - If the call fails because wallet/card setup is incomplete, follow the payment skill's readiness/authorization flow before proceeding. DO NOT enable auto top-up until pre-check passes.
+3. **Generic `clink-payment-skill` runtime**: use the real `clink-cli` readiness/authorization commands from the Merchant Payment Handoff Contract. Do not look for `agent-payment-skills` and do not call nonexistent `agent-payment-skills.*` tools.
+4. **After the runtime payment readiness check passes**: IMMEDIATELY use the `exec` tool to run: `node {SKILL_DIR}/scripts/set-auto-pay.mjs true`
    - After the exec command succeeds, **immediately** send ONE final confirmation notification:
      - All channels should use the unified payload: `{"message_key":"autopay.enabled","vars":{}}`
    - After sending this notification, you may continue with a short natural-language reply.
@@ -283,7 +266,7 @@ Important:
 **During later 402 auto-pay recovery:**
 - `payment handoff` means the payment layer has confirmed successful payment and provided a structured `payment_handoff` payload for merchant recharge confirmation.
 - For session-based recovery, the ModelMax merchant backend has already created the Clink payment session before returning HTTP 402. Use the returned `sessionId` plus `NO_SHIPPING_REQUIRED`, mandate scope, products, and `merchant_integration`; never pay with only `sessionId`.
-- For generic `clink-payment-skill`, use the real `clink-cli` readiness/authorization/pay commands from the Merchant Payment Handoff Contract. For OpenClaw, call `agent-payment-skills.clink_pay` with the full payload.
+- For `clink-payment-skill`, use the real `clink-cli` readiness/authorization/pay commands from the Merchant Payment Handoff Contract. For runtimes exposing `agent-payment-skills`, call `agent-payment-skills.clink_pay` with the full payload.
 - For direct-mode recovery, if amount/currency are already explicit, perform payment readiness/authorization first, then call `get_payment_config`, then pay with `merchant_id`, `amount`, `currency`, `NO_SHIPPING_REQUIRED`, mandate scope, products, and `merchant_integration`. If amount/currency are not explicit, call `get_payment_config` before authorization so the mandate scope is complete.
 - If payment returns a pending payment intent, wait for the payment skill's `resume_pending_payment_intent` flow and final payment handoff.
 - If a later payment handoff arrives, you MUST pass its `payment_handoff` object through to `check_recharge_status` exactly as received.
@@ -292,35 +275,13 @@ Important:
 
 After payment handoff:
 1. Call `check_recharge_status` exactly once.
-2. If `check_recharge_status` direct-sent `✅ Recharge Successful`, do NOT send another recharge-success notification.
-3. If `check_recharge_status` direct-sent `❌ Recharge Failed`, do NOT send another failure notification.
-4. If `check_recharge_status` returns an explicit exec directive, execute it exactly once.
-5. The `check_recharge_status` tool will automatically resume the pending image/video task upon success. Do NOT manually resume the task yourself unless the tool explicitly instructs you to.
+2. `check_recharge_status` MUST poll ModelMax every 1 second for up to 5 minutes.
+3. If `check_recharge_status` returns a `notification` payload, send it exactly once with the current agent/runtime's own messaging capability.
+4. The `check_recharge_status` tool will automatically resume the pending image/video task upon success. Do NOT manually resume the task yourself unless the tool explicitly instructs you to.
+5. If the returned JSON contains `resumed_task.result.path`, deliver that local file with the current agent/runtime's own file or media sending capability.
 
-- Current implementation persists pending auto-pay tasks under `~/.openclaw/state/modelmax-media/pending-auto-pay-task.json`, so recharge confirmation can resume the original task even when ModelMax tools are called through short-lived subprocesses.
+- Current implementation persists pending auto-pay tasks under `~/.modelmax/state/modelmax-media/pending-auto-pay-task.json`, so recharge confirmation can resume the original task even when ModelMax tools are called through short-lived subprocesses.
 - For automatic 402 / low-balance recovery, if the user did not explicitly provide a new amount in the current turn, you MUST use the exact `default_amount` returned by `get_payment_config`.
 
 **If the user does not explicitly ask to enable auto top-up** (any other reply, or no reply, or silence):
 Do nothing — auto-pay remains disabled. Do NOT send any additional notification. Move on.
-
-### 3. Uninstall
-When the user asks to uninstall this skill, do NOT manually chain shell commands like `mcporter config remove`, `/config delete`, `rm -rf`, or a later card send. That is fragile and can delete the files needed for the final notification.
-
-Instead, the agent MUST call the dedicated MCP tool:
-
-```text
-uninstall_skill
-```
-
-Tool behavior:
-- Removes the MCP registration for `modelmax-media`
-- Clears legacy skill config entries if present
-- Clears local pending ModelMax state
-- Does not delete the user-level ModelMax config at `~/.modelmax/config.json`
-- Sends the uninstall confirmation notification directly when a notify target is provided
-- Deletes the skill directory LAST
-
-Execution rule:
-- Call `uninstall_skill` with the current notify target when available so the tool itself can send the uninstall notification before self-deletion.
-- If no direct target is available, call `uninstall_skill`, then relay the returned completion message.
-- Follow `DIRECT_SEND` / normal reply behavior and avoid duplicate notifications or media.

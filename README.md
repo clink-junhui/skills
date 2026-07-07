@@ -2,7 +2,7 @@
 
 English | [简体中文](README-zh.md)
 
-ModelMax Skills adds image generation, video generation, balance checks, and optional auto top-up to OpenClaw agents.
+ModelMax Skills adds image generation, video generation, balance checks, and optional auto top-up to agents that can use MCP tools through mcporter.
 
 ---
 
@@ -55,12 +55,12 @@ npx mcporter --config "$HOME/.modelmax/mcporter.json" config add modelmax-media 
 
 `index.bundle.mjs` is already bundled in the repo, so `npm install` is not required for installation.
 
-### Installation for OpenClaw
+### Agent-Managed Install
 
-Install the skill into OpenClaw's managed skills directory instead of cloning the whole repo into `~/.openclaw/workspace`:
+If your agent manages skills, copy only `skills/media-generation` into that agent's skill directory, then run the pre-install script from the installed skill directory. The exact skill directory is agent-specific.
 
 ```bash
-TARGET_DIR="${OPENCLAW_HOME:-$HOME}/.openclaw/workspace/skills/modelmax-media"
+TARGET_DIR="$HOME/.modelmax/workspace/skills/modelmax-media"
 
 mkdir -p "$(dirname "$TARGET_DIR")"
 rm -rf "$TARGET_DIR"
@@ -70,16 +70,9 @@ cd "$TARGET_DIR"
 node scripts/pre_install.mjs --channel <CHANNEL> --target-id <TARGET_ID> --target-type <TARGET_TYPE>
 ```
 
-Do not clone this repo directly into `~/.openclaw/workspace/`. For OpenClaw, only copy `skills/media-generation` into `~/.openclaw/workspace/skills/modelmax-media`.
+Do not clone the whole repo directly into an agent workspace. Only copy the `skills/media-generation` skill directory.
 
-For Feishu, use one of:
-
-```bash
-node scripts/pre_install.mjs --channel feishu --target-id <CHAT_ID> --target-type chat_id
-node scripts/pre_install.mjs --channel feishu --target-id <OPEN_ID> --target-type open_id
-```
-
-`pre_install.mjs` registers the MCP server and sends the install success notification immediately. It does not wait for any later restart-success card.
+`--channel`, `--target-id`, and `--target-type` are optional routing hints. `pre_install.mjs` registers the MCP server and prints the install success notification payload as JSON on stdout. The current agent/runtime should send that payload with its own messaging capability.
 
 ---
 
@@ -93,13 +86,13 @@ Send your ModelMax API key directly to the agent.
 
 ### Local ModelMax Config
 
-From the installed skill directory (`~/.openclaw/workspace/skills/modelmax-media`), run:
+From the installed skill directory, run:
 
 ```bash
 node scripts/set-api-key.mjs sk-xxxx
 ```
 
-This writes the key into `~/.modelmax/config.json` instead of `openclaw.json`.
+This writes the key into `~/.modelmax/config.json`.
 
 `MODELMAX_AUTO_PAY` is also stored in the same local `~/.modelmax/config.json`.
 
@@ -115,7 +108,7 @@ export MODELMAX_API_KEY="sk-xxxx"
 
 Auto top-up requires:
 
-- [agent-payment-skills](https://github.com/clinkbillcom/agent-payment-skills)
+- A Clink payment capability exposed by the current agent/runtime, such as an `agent-payment-skills` MCP server or `clink-payment-skill` CLI workflow
 
 When enabled, the agent can recharge automatically and continue the original generation task.
 
@@ -165,7 +158,8 @@ Uninstall ModelMax Skills
 
 ## Compatibility
 
-- OpenClaw
+- Any agent/runtime that can register and call MCP tools through mcporter
+- The agent/runtime is responsible for sending notification payloads and delivering generated files
 
 ---
 
