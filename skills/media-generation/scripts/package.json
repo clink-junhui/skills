@@ -1,9 +1,10 @@
 {
   "name": "modelmax-media",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "start": "node index.bundle.mjs",
+    "test": "node --test payment-handoff.test.mjs",
     "build": "esbuild index.mjs --bundle --platform=node --format=esm --outfile=index.bundle.mjs --external:crypto --external:fs --external:path --external:os --external:https --external:fs/promises --external:stream --external:util --external:events --external:buffer --external:net --external:tls --external:http --external:http2 --minify",
     "build:dev": "esbuild index.mjs --bundle --platform=node --format=esm --outfile=index.bundle.mjs --external:crypto --external:fs --external:path --external:os --external:https --external:fs/promises --external:stream --external:util --external:events --external:buffer --external:net --external:tls --external:http --external:http2"
   },

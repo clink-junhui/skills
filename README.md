@@ -117,6 +117,11 @@ Amount rules:
 - If you explicitly provide a recharge amount in the current turn, that amount is used
 - Otherwise, the system uses the merchant default amount
 
+Payment method rules:
+
+- If you explicitly choose Alipay in the current turn, ModelMax passes `ALIPAY` to the Clink payment runtime
+- If you do not choose a payment method, the existing default payment behavior remains unchanged
+
 ---
 
 ## Common Usage
@@ -134,6 +139,10 @@ Amount rules:
 ### Balance Check
 
 - `Check my ModelMax balance`
+
+### Manual Recharge
+
+- `Recharge ModelMax with 1 USD using Alipay`
 
 ### Auto Top-Up
 
