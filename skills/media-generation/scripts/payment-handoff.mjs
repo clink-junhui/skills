@@ -178,7 +178,11 @@ clink-cli pay --session-id ${resolvedSessionId}${paymentMethodFlag} --payment-in
 export function buildGenericPaymentSuccessHandlingTemplate() {
   return `# If clink-cli pay exits 0 with data.status=1, use the pay result as the payment_handoff.
 # If explicit ALIPAY returns status=5 with QR_CODE_REQUIRED, --terminal-qr already rendered
-# the character QR on stderr. Use customerAction.imagePath only after the safe terminal warning.
+# the character QR on stderr. Codex tool transcripts may be collapsed and are not user-visible.
+# Extract only the contiguous QR lines and repeat them exactly in a fenced text block in the
+# next assistant message. Do not replace successful character output with PNG due to alignment.
+# Do not call nodeRepl.emitImage, view_image, or another image/file attachment tool in this branch.
+# Use customerAction.imagePath only after the exact safe terminal warning or missing block output.
 # Do not retry pay or call check_recharge_status before a correlated terminal order event.
 # For QR, 3DS, or another async order handoff, wait once for either terminal result:
 clink-cli events poll --type agent_order.succeeded,agent_order.failed --format json`;

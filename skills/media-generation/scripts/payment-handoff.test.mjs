@@ -120,6 +120,11 @@ test("generic success guidance handles the terminal QR without retrying payment"
   assert.match(guidance, /status=5 with QR_CODE_REQUIRED/);
   assert.match(guidance, /--terminal-qr/);
   assert.match(guidance, /customerAction\.imagePath/);
+  assert.match(guidance, /tool transcripts may be collapsed and are not user-visible/);
+  assert.match(guidance, /repeat them exactly in a fenced text block/);
+  assert.match(guidance, /Do not replace successful character output with PNG/);
+  assert.match(guidance, /Do not call nodeRepl\.emitImage, view_image/);
+  assert.match(guidance, /exact safe terminal warning or missing block output/);
   assert.match(guidance, /Do not retry pay or call check_recharge_status/);
   assert.match(guidance, /agent_order\.succeeded,agent_order\.failed/);
 });
@@ -134,6 +139,10 @@ test("skill and 402 source expose the optional current-turn payment method contr
   assert.match(skillSource, /paymentMethodType: "ALIPAY"/);
   assert.match(skillSource, /--payment-method-type ALIPAY/);
   assert.match(skillSource, /--terminal-qr/);
+  assert.match(skillSource, /command transcripts may be collapsed and are not user-visible/);
+  assert.match(skillSource, /fenced `text` block/);
+  assert.match(skillSource, /Do not replace successful character output with PNG/);
+  assert.match(skillSource, /do not call `nodeRepl\.emitImage`, `view_image`/);
   assert.match(skillSource, /version: "1\.0\.1"/);
   assert.match(indexSource, /args\?\.paymentMethodType/);
   assert.match(indexSource, /paymentMethodType: \{ type: "string"/);
