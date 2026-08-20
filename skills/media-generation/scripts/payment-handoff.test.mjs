@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import {
   buildGenericDirectPayCommandTemplate,
+  buildGenericPaymentSuccessHandlingTemplate,
   buildGenericPaymentReadinessAndAuthorizationCommands,
   buildGenericSessionPayCommandTemplate,
   buildModelMaxCreditPayPayload,
@@ -69,12 +70,14 @@ test("CLI direct and session ALIPAY commands never carry card or Visa authorizat
     buildGenericSessionPayCommandTemplate("session_1", "ALIPAY"),
   ]) {
     assert.match(command, /--payment-method-type ALIPAY/);
+    assert.match(command, /--terminal-qr/);
     assert.doesNotMatch(command, /--payment-instrument-id/);
     assert.doesNotMatch(command, /--instruction-id/);
     assert.doesNotMatch(command, /--mandate-id/);
   }
 
   const readiness = buildGenericPaymentReadinessAndAuthorizationCommands("ALIPAY");
+  assert.match(readiness, /--payment-method-type ALIPAY --terminal-qr/);
   assert.doesNotMatch(readiness, /clink-cli card binding-link/);
   assert.doesNotMatch(readiness, /clink-cli instruction/);
 });
@@ -108,7 +111,17 @@ test("guidance forbids history inference and explains the ALIPAY PI boundary", (
   assert.match(buildPaymentMethodGuidance(), /Do NOT infer a payment method from earlier conversation/);
   const alipayGuidance = buildPaymentMethodGuidance("ALIPAY");
   assert.match(alipayGuidance, /paymentMethodType="ALIPAY"/);
+  assert.match(alipayGuidance, /--payment-method-type ALIPAY --terminal-qr/);
   assert.match(alipayGuidance, /Do NOT attach a card paymentInstrumentId/);
+});
+
+test("generic success guidance handles the terminal QR without retrying payment", () => {
+  const guidance = buildGenericPaymentSuccessHandlingTemplate();
+  assert.match(guidance, /status=5 with QR_CODE_REQUIRED/);
+  assert.match(guidance, /--terminal-qr/);
+  assert.match(guidance, /customerAction\.imagePath/);
+  assert.match(guidance, /Do not retry pay or call check_recharge_status/);
+  assert.match(guidance, /agent_order\.succeeded,agent_order\.failed/);
 });
 
 test("skill and 402 source expose the optional current-turn payment method contract", async () => {
@@ -120,6 +133,7 @@ test("skill and 402 source expose the optional current-turn payment method contr
   assert.match(skillSource, /Payment Method Selection Rule \(Hard Rule\)/);
   assert.match(skillSource, /paymentMethodType: "ALIPAY"/);
   assert.match(skillSource, /--payment-method-type ALIPAY/);
+  assert.match(skillSource, /--terminal-qr/);
   assert.match(skillSource, /version: "1\.0\.1"/);
   assert.match(indexSource, /args\?\.paymentMethodType/);
   assert.match(indexSource, /paymentMethodType: \{ type: "string"/);

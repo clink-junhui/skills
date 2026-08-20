@@ -131,7 +131,7 @@ export function buildGenericPaymentReadinessAndAuthorizationCommands(paymentMeth
   if (normalized === "ALIPAY") {
     return `# Explicit ALIPAY path: do not resolve a default card.
 # Do not run Visa/VIC instruction or mandate commands.
-# Continue directly to pay with --payment-method-type ALIPAY.`;
+# Continue directly to pay with --payment-method-type ALIPAY --terminal-qr.`;
   }
   return `# Run as an FSM: execute only the command for the current observed state, not every line blindly.
 # Refresh payment methods and inspect data.paymentMethodsVoList:
@@ -152,7 +152,7 @@ export function buildGenericDirectPayCommandTemplate(paymentMethodType = null) {
   const normalized = normalizeExplicitPaymentMethodType(paymentMethodType);
   if (normalized === "ALIPAY") {
     return `# Explicit ALIPAY path without a card PI or Visa/VIC authorization:
-clink-cli pay --merchant-id <MERCHANT_ID> --amount <AMOUNT> --currency <CURRENCY> --payment-method-type ALIPAY --format json`;
+clink-cli pay --merchant-id <MERCHANT_ID> --amount <AMOUNT> --currency <CURRENCY> --payment-method-type ALIPAY --terminal-qr --format json`;
   }
   const paymentMethodFlag = normalized ? ` --payment-method-type ${normalized}` : "";
   return `# Non-Visa/CARD path:
@@ -166,7 +166,7 @@ export function buildGenericSessionPayCommandTemplate(sessionId, paymentMethodTy
   const resolvedSessionId = sessionId || "<SESSION_ID>";
   if (normalized === "ALIPAY") {
     return `# Explicit ALIPAY path without a card PI or Visa/VIC authorization:
-clink-cli pay --session-id ${resolvedSessionId} --payment-method-type ALIPAY --format json`;
+clink-cli pay --session-id ${resolvedSessionId} --payment-method-type ALIPAY --terminal-qr --format json`;
   }
   const paymentMethodFlag = normalized ? ` --payment-method-type ${normalized}` : "";
   return `# Non-Visa/CARD path:
@@ -177,8 +177,11 @@ clink-cli pay --session-id ${resolvedSessionId}${paymentMethodFlag} --payment-in
 
 export function buildGenericPaymentSuccessHandlingTemplate() {
   return `# If clink-cli pay exits 0 with data.status=1, use the pay result as the payment_handoff.
-# If pay returns a 3DS redirect or async order handoff, wait for the correlated success event:
-clink-cli events poll --type agent_order.succeeded --format json`;
+# If explicit ALIPAY returns status=5 with QR_CODE_REQUIRED, --terminal-qr already rendered
+# the character QR on stderr. Use customerAction.imagePath only after the safe terminal warning.
+# Do not retry pay or call check_recharge_status before a correlated terminal order event.
+# For QR, 3DS, or another async order handoff, wait once for either terminal result:
+clink-cli events poll --type agent_order.succeeded,agent_order.failed --format json`;
 }
 
 export function buildPaymentMethodGuidance(paymentMethodType = null) {
@@ -189,7 +192,7 @@ Do NOT infer a payment method from earlier conversation. Omit paymentMethodType 
   }
   if (normalized === "ALIPAY") {
     return `The explicit payment method for this payment is ALIPAY.
-Pass paymentMethodType="ALIPAY" to agent-payment-skills.clink_pay or --payment-method-type ALIPAY to clink-cli pay.
+Pass paymentMethodType="ALIPAY" to agent-payment-skills.clink_pay or --payment-method-type ALIPAY --terminal-qr to clink-cli pay.
 Do NOT attach a card paymentInstrumentId, instruction ID, or mandate ID. The merchant mandates array remains required payment scope and is not a Visa mandate ID.`;
   }
   return `The explicit payment method for this payment is ${normalized}.

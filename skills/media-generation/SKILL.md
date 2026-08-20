@@ -118,7 +118,7 @@ You MUST NOT replace the merchant default with `1`, `5`, or any other arbitrary 
 - Never infer a payment method from prior conversation, an earlier recharge, a cached default, or a remembered preference.
 - For explicit `ALIPAY`:
   - MCP: pass `paymentMethodType: "ALIPAY"` to `agent-payment-skills.clink_pay`.
-  - CLI: pass `--payment-method-type ALIPAY` to `clink-cli pay`.
+  - CLI: pass `--payment-method-type ALIPAY --terminal-qr` to `clink-cli pay`.
   - Do not pass a card `paymentInstrumentId`, `--payment-instrument-id`, Visa/VIC instruction ID, or mandate ID.
   - Keep the merchant `mandates` array used for amount/currency scope; it is not a Visa/VIC mandate ID.
 
@@ -132,7 +132,7 @@ When the user explicitly asks to recharge ModelMax, for example "我要给 Model
    - otherwise call `get_payment_config` first because authorization matching requires amount/currency, then use the exact `default_amount` and `currency` returned by `get_payment_config`.
 3. Run the runtime-specific Clink payment readiness and authorization gate before direct pay:
    - Generic `clink-payment-skill`:
-     - If `paymentMethodType` is explicitly `ALIPAY`, do not resolve a default card and do not run card binding or Visa/VIC instruction commands; continue to direct pay with `--payment-method-type ALIPAY`.
+     - If `paymentMethodType` is explicitly `ALIPAY`, do not resolve a default card and do not run card binding or Visa/VIC instruction commands; continue to direct pay with `--payment-method-type ALIPAY --terminal-qr`.
      - Otherwise run `clink-cli card binding-link --no-watch --format json` and inspect `data.paymentMethodsVoList`.
      - If no payment method is available, run `clink-cli card binding-link --format json`, surface the binding URL, and wait for `payment_method.added` before restarting the readiness gate.
      - If the selected/default method is Visa, run `clink-cli instruction list --valid-only --payment-instrument-id <PAYMENT_INSTRUMENT_ID> --format json`; if no matching ACTIVE instruction+mandate covers the selected ModelMax amount/currency, run `clink-cli instruction create` with the Apple Park no-shipping placeholder address, wait for `purchase_instruction.activated`, then re-list and select the matching `instruction_id` + `mandate_id`.
@@ -141,14 +141,14 @@ When the user explicitly asks to recharge ModelMax, for example "我要给 Model
 4. Call `get_payment_config` to fetch the fresh `merchant_id`, `default_amount`, and `currency` if it was not already called in step 2.
 5. Call the runtime-specific pay path with `merchant_id`, selected `amount`, selected `currency`, `fulfillmentType: "NO_SHIPPING_REQUIRED"`, `merchantName: "ModelMax"`, ModelMax Credits `products`, matching `mandates`, and `merchant_integration.confirm_tool: "check_recharge_status"`.
    - Generic `clink-payment-skill`: run `clink-cli pay --merchant-id <MERCHANT_ID> --amount <AMOUNT> --currency <CURRENCY> --format json`; for Visa/VIC include the matched `--payment-instrument-id`, `--instruction-id`, `--mandate-id`, Apple Park no-shipping placeholder `--shipping-address`, and `--products`.
-     - Explicit Alipay: run `clink-cli pay --merchant-id <MERCHANT_ID> --amount <AMOUNT> --currency <CURRENCY> --payment-method-type ALIPAY --format json` with no payment-instrument, instruction, or mandate ID flags.
+     - Explicit Alipay: run `clink-cli pay --merchant-id <MERCHANT_ID> --amount <AMOUNT> --currency <CURRENCY> --payment-method-type ALIPAY --terminal-qr --format json` with no payment-instrument, instruction, or mandate ID flags.
    - Runtime exposing `agent-payment-skills`: call `agent-payment-skills.clink_pay` with the full payload; do not call it with only merchant/session identifiers.
      - Explicit Alipay: add `paymentMethodType: "ALIPAY"` and omit `paymentInstrumentId`, `instructionId`, and `mandateId`.
    - If payment method was not explicitly selected, omit the field/flag and keep the legacy default-payment path unchanged.
    - The ModelMax Credits product is fixed as `productId: "modelmax-credits"` and `productName: "ModelMax Credits"`.
    - Set `quantity: 1`.
    - Set `unitPrice: selected amount`, where selected amount is the explicit user recharge amount when present, otherwise `default_amount`.
-6. Wait for the payment layer's structured `payment_handoff`. In generic `clink-payment-skill`, parse `clink-cli pay` by exit code and `data.status`; for `exit=0` + `status=1`, build the handoff from the pay result. If pay enters an async/3DS path, wait for the matching success event with `clink-cli events poll --type agent_order.succeeded --format json` and only continue after the event correlates to the current order/session.
+6. Wait for the payment layer's structured `payment_handoff`. In generic `clink-payment-skill`, parse `clink-cli pay` by exit code and `data.status`; for `exit=0` + `status=1`, build the handoff from the pay result. For explicit Alipay `status=5` plus `customerAction.type=QR_CODE_REQUIRED`, preserve the UTF-8 QR already emitted by `--terminal-qr`; if the CLI emitted its terminal warning or the runtime cannot preserve terminal spacing, display `customerAction.imagePath` as the PNG fallback. Do not retry pay or call `check_recharge_status` yet. Wait for one correlated `agent_order.succeeded,agent_order.failed` any-of event. Other async/3DS paths also wait for the matching order result before continuing.
 7. Call `check_recharge_status` exactly once with that `payment_handoff`. Do not send merchant-layer recharge success before `check_recharge_status` returns `credited=true` or `status=paid`.
 
 For manual recharge, `merchant_integration.server` must use the current registered ModelMax MCP server name. Do not hardcode a stale alias. For 402 recovery, use the server value from the 402 directive.
@@ -173,7 +173,7 @@ ModelMax should drive its own merchant payment intent and hand off Clink executi
   - authorization creation when no match exists: `clink-cli instruction create ... --shipping-address '{"name":"Clink User","line1":"One Apple Park Way","city":"Cupertino","state":"CA","zip":"95014","countryCode":"US","deliveryContactDetails":{}}' --format json`, then wait for `clink-cli events poll --type purchase_instruction.activated --format json`
   - direct pay: `clink-cli pay --merchant-id <MERCHANT_ID> --amount <AMOUNT> --currency <CURRENCY> --format json`
   - session pay: `clink-cli pay --session-id <SESSION_ID> --format json`
-  - explicit Alipay direct/session pay: add `--payment-method-type ALIPAY` and do not add payment-instrument, instruction, or mandate ID flags
+  - explicit Alipay direct/session pay: add `--payment-method-type ALIPAY --terminal-qr` and do not add payment-instrument, instruction, or mandate ID flags
   - async payment success wait, when pay returns a redirect or pending async handoff: `clink-cli events poll --type agent_order.succeeded --format json`
   - Visa/VIC pay must additionally include the matched `--payment-instrument-id`, `--instruction-id`, `--mandate-id`, Apple Park no-shipping `--shipping-address`, and ModelMax Credits `--products`.
 
