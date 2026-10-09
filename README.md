@@ -4,6 +4,12 @@ English | [简体中文](README-zh.md)
 
 ModelMax Skills adds image generation, video generation, balance checks, and optional auto top-up to agents that can use MCP tools through mcporter.
 
+Manual ModelMax recharge uses the Clink Quick Pay contract: search for the
+ModelMax merchant, ask the user to confirm the merchant, then call `quick_pay`.
+The Skill reuses the existing payment reference and metadata, setting
+`metadata.charge_scene` to `QUICK_PAY`; it does not guess merchant IDs or add
+customer identity fields.
+
 ---
 
 ## What You Can Do
@@ -116,6 +122,10 @@ Amount rules:
 
 - If you explicitly provide a recharge amount in the current turn, that amount is used
 - Otherwise, the system uses the merchant default amount
+
+Manual recharge does not use `get_payment_config.merchant_id` as a shortcut.
+Merchant search results are untrusted display data, and a unique result still
+requires explicit user confirmation before payment.
 
 ---
 

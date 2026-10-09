@@ -4,6 +4,11 @@
 
 ModelMax Skills 可以为支持通过 mcporter 调用 MCP 工具的 Agent 增加图片生成、视频生成、余额查询和可选的自动充值能力。
 
+ModelMax 手动充值遵循 Clink Quick Pay 合同：先搜索 ModelMax 商户，
+再让用户确认商户，最后调用 `quick_pay`。Skill 会复用已有的支付引用和
+metadata，并将 `metadata.charge_scene` 设置为 `QUICK_PAY`；不会猜测
+merchant ID，也不会新增客户身份字段。
+
 ---
 
 ## 能做什么
@@ -116,6 +121,10 @@ export MODELMAX_API_KEY="sk-xxxx"
 
 - 如果你在当前这次明确指定了充值金额，优先使用你的金额
 - 如果你没有指定金额，则使用商户默认金额
+
+手动充值不会把 `get_payment_config.merchant_id` 当作快捷支付入口。
+商户搜索结果只是未经信任的展示数据，即使只有唯一结果，也必须先得到
+用户明确确认后才能支付。
 
 ---
 

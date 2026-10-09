@@ -1185,7 +1185,7 @@ function isPendingAutoPayResumeStale(task) {
 // 1. Initialize MCP Server
 const server = new Server({
   name: MCP_SERVER_NAME,
-  version: "1.0.0"
+  version: "1.1.0"
 }, {
   capabilities: { tools: {} }
 });
