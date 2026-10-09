@@ -4,11 +4,23 @@ English | [简体中文](README-zh.md)
 
 ModelMax Skills adds image generation, video generation, balance checks, and optional auto top-up to agents that can use MCP tools through mcporter.
 
-Manual ModelMax recharge uses the Clink Quick Pay contract: search for the
-ModelMax merchant, ask the user to confirm the merchant, then call `quick_pay`.
-The Skill reuses the existing payment reference and metadata, setting
-`metadata.charge_scene` to `QUICK_PAY`; it does not guess merchant IDs or add
-customer identity fields.
+Manual ModelMax recharge uses Clink MCP `search_merchants` with `keyword` only
+(maximum 100 characters, at most 3 results), then user merchant confirmation and
+`quick_pay`. An exact, currently confirmed merchant may be reused at the user's
+request without another search. Quick Pay requires `confirmed: true` and an integer
+minor-unit amount (100 USD = 10000); it prepares payment, never charges.
+Approve its live `CONFIRM` action before `execute_payment`. After `SETUP_REQUIRED`,
+complete the server-directed setup and resume `quick_pay` with the same `operation_id`.
+The Host does not enumerate Instructions or use a direct-pay fallback.
+
+Reference and metadata are optional: preserve existing values when present;
+the server adds `metadata.charge_scene=QUICK_PAY`. No invented merchant IDs,
+references, customer identity, `products`, or `merchant_integration` arguments.
+After a canonical payment Operation is `SUCCEEDED`, adapt its `orderId` to the
+existing `payment_handoff` and invoke `check_recharge_status` once per order.
+Quick Pay does not itself emit that handoff. Merchant crediting still depends on
+the existing ModelMax backend integration; no webhook endpoint is created here.
+The existing 402 auto-pay flow is unchanged.
 
 ---
 
