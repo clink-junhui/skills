@@ -8,18 +8,29 @@ Manual ModelMax recharge — and any request where the user has already identifi
 merchant by name or domain — uses Clink MCP `match_products` with `merchant_name`
 or `merchant_url` (at least one is required; `product_name` is optional and omitting
 it returns that merchant's full product list), then an explicit user confirmation of
-one `merchant_id` + `product_id` + `price_id`, then `quick_pay`. Quick Pay takes no
-`amount`, `currency`, or `products`: the server resolves the amount and currency from
-the confirmed `price_id`. It prepares payment, never charges; approve its live
-`CONFIRM` action before `execute_payment`. After `SETUP_REQUIRED`, complete the
-server-directed setup and resume `quick_pay` with the same `operation_id`. The Host
-does not enumerate Instructions or use a direct-pay fallback. If the conversation
-carries no merchant information at all, use the existing UCP `discover_catalog` path
-instead.
+one `merchant_id` + `product_id` + `price_id`, then `quick_pay`. In that catalogue
+shape Quick Pay takes no `amount`, `currency`, or `products`: the server resolves the
+amount and currency from the confirmed `price_id`. It prepares payment, never charges;
+approve its live `CONFIRM` action before `execute_payment`. After `SETUP_REQUIRED`,
+complete the server-directed setup and resume `quick_pay` with the same `operation_id`.
+The Host does not enumerate Instructions or use a direct-pay fallback. If the
+conversation carries no merchant information at all, use the existing UCP
+`discover_catalog` path instead.
+
+Topup is the documented exception for a merchant that has no catalogue product to
+select: when the buyer names a merchant, names no product, and explicitly asks to
+recharge it, call `match_products` with `topup: true`. The result then carries one
+server-owned `topup` product with an empty `prices` list, and `quick_pay` takes that
+exact `merchant_id`, `product_id: "topup"`, and the buyer's own `amount` (minor
+currency units) plus `currency` instead of a `price_id`. Naming no product on its own is
+not recharge intent, and the two Quick Pay shapes are mutually exclusive. The buyer's
+amount stays bounded by the matching ACTIVE Instruction, so an amount no authorization
+covers returns `SETUP_REQUIRED` instead of charging.
 
 Reference and metadata are optional: preserve existing values when present;
 the server adds `metadata.charge_scene=QUICK_PAY`. No invented merchant, product or
-price IDs, references, customer identity, or Host-constructed payment parameters.
+price IDs, references, customer identity, or Host-constructed payment parameters, and
+no invented amount — the topup `amount` is always the buyer's own figure.
 After a canonical payment Operation is `SUCCEEDED`, adapt its `orderId` to the
 existing `payment_handoff` and invoke `check_recharge_status` once per order.
 Quick Pay does not itself emit that handoff. Merchant crediting still depends on

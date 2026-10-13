@@ -8,15 +8,23 @@ ModelMax 手动充值（以及用户已在 prompt 中给出商户名称或域名
 `match_products`：`merchant_name` 或 `merchant_url` 至少传一个，`product_name` 可选
 （不传则返回该商户全部商品）；随后由用户显式确认一个
 `merchant_id` + `product_id` + `price_id`，再调用 `quick_pay`。
-Quick Pay 不再传 `amount`、`currency` 或 `products`，金额与币种由服务端按
+目录模式下 Quick Pay 不传 `amount`、`currency` 或 `products`，金额与币种由服务端按
 `price_id` 解析；它只准备支付，用户批准服务端当前 `CONFIRM` 后才调用
 `execute_payment`；遇到 `SETUP_REQUIRED` 完成服务端指示的设置后，用原
 `operation_id` 续接 `quick_pay`。Host 不枚举 Instruction，也不回退到 direct pay。
 如果对话里完全没有商户信息，则走既有 UCP `discover_catalog` 路径。
 
+Topup（直充）是没有目录商品可选时的特例：用户只给出商户、没有产品名，且明确表示要给该
+商户充值，此时用 `match_products` + `topup: true`，返回每个商户下一条服务端合成的
+`topup` 商品（`prices` 为空）。随后 `quick_pay` 传该 `merchant_id`、
+`product_id: "topup"`，金额用用户自己给出的 `amount`（最小货币单位）加 `currency`，
+不传 `price_id`。仅"没有产品名"不等于充值意图；两种 Quick Pay 形态互斥。
+用户金额仍受匹配到的 ACTIVE Instruction 额度约束，超出额度会返回 `SETUP_REQUIRED`
+而不是扣款。
+
 Reference 和 metadata 均可选，有则原样保留；服务端补充
 `metadata.charge_scene=QUICK_PAY`。不猜测商户/商品/价格 ID、引用或客户身份，
-也不在 Host 侧构造支付参数。
+也不在 Host 侧构造支付参数；topup 的 `amount` 必须来自用户本人，不能推断或默认。
 支付 Operation 为 `SUCCEEDED` 后，将其 `orderId` 适配为现有
 `payment_handoff`，每个订单只调用一次 `check_recharge_status`；
 Quick Pay 本身不返回该 handoff。到账仍依赖现有 ModelMax 后端集成，

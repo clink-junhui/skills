@@ -13,9 +13,9 @@ test("manual recharge routes through match_products and explicit price confirmat
   assert.match(skillSource, /match_products.*user confirmation.*quick_pay/is);
   assert.match(skillSource, /Send `merchant_name` or `merchant_url`; at least one is required/);
   assert.match(skillSource, /Add `product_name` only when the user already named a product/);
-  assert.match(skillSource, /Do NOT pass `amount`, `currency`, `products`/);
-  assert.match(skillSource, /Quick Pay amount and currency MUST come only from the user-selected price/);
-  assert.match(skillSource, /Never build\s+payment parameters from `get_payment_config`'s `default_amount`\/`currency`/);
+  assert.match(skillSource, /The only valid amount source is the `price_id` that the user explicitly confirms/);
+  assert.match(skillSource, /Do NOT pass `products`, `merchant_integration`, `mandates`/);
+  assert.match(skillSource, /The Host MUST NOT build\s+payment parameters from `get_payment_config`'s\s+`default_amount`\/`currency`/);
   assert.match(skillSource, /do not call `clink_pay`, `clink-cli pay`, or direct payment endpoints for this route/);
 });
 
@@ -28,7 +28,7 @@ test("the removed search_merchants flow is gone from docs", () => {
 });
 
 test("merchant, product, and price results have separate safety gates", () => {
-  assert.match(skillSource, /No returned merchant, product, or price: stop/);
+  assert.match(skillSource, /No returned merchant, or no usable selection: stop/);
   assert.match(skillSource, /A unique candidate still requires explicit confirmation/);
   assert.match(skillSource, /display all returned candidates/);
   assert.match(skillSource, /Do not pay while the choice is ambiguous/);
@@ -63,7 +63,7 @@ test("Quick Pay binds the confirmed selection without Host-built payment fields"
 
 test("Quick Pay follows CONFIRM, resumable SETUP_REQUIRED, and execute-once semantics", () => {
   assert.match(skillSource, /`CONFIRM`:[\s\S]*?`execute_payment` once/);
-  assert.match(skillSource, /`SETUP_REQUIRED`:[\s\S]*?same frozen `merchant_id`, `product_id`, `price_id`/);
+  assert.match(skillSource, /`SETUP_REQUIRED`:[\s\S]*?same frozen selection and original `operation_id`: the same `merchant_id` \+ `product_id` \+ `price_id` in catalogue mode/);
   assert.match(skillSource, /same `operation_id`/);
   assert.match(skillSource, /Do not enumerate Instructions in the Host/);
   assert.match(skillSource, /Never repeat `execute_payment`/);
@@ -85,17 +85,44 @@ test("payment handoff and recharge confirmation remain single-owner semantics", 
   assert.match(skillSource, /missing webhook wake alone does not[\s\S]*block a canonical `SUCCEEDED` Operation/);
 });
 
+test("topup is a semantic recharge exception, never a missing-product fallback", () => {
+  assert.match(skillSource, /#### Topup Exception \(recharge without a catalogue product\)/);
+  assert.match(skillSource, /Add `topup: true`; this is the only case that uses topup mode/);
+  assert.match(skillSource, /Otherwise keep catalogue mode and do NOT send `topup`/);
+  assert.match(skillSource, /Naming no product is not by itself recharge intent/);
+  assert.match(skillSource, /Naming no product is NOT recharge intent/);
+  assert.match(skillSource, /`topup` is a documented recharge exception, never a fallback/);
+  assert.match(skillSource, /never set it merely because the user named no product/);
+  assert.match(skillSource, /Require an explicit recharge request for that merchant or its balance/);
+});
+
+test("topup shapes are mutually exclusive and amount-preserving", () => {
+  assert.match(skillSource, /\{"merchant_name":"ModelMax","topup":true\}/);
+  assert.match(skillSource, /"product_id":"topup","product_name":"<MERCHANT_NAME> Topup","prices":\[\]/);
+  assert.match(skillSource, /\{"merchant_id":"<CONFIRMED_MERCHANT_ID>","product_id":"topup","amount":1000,"currency":"USD","confirmed":true\}/);
+  assert.match(skillSource, /Topup mode: `merchant_id`, `product_id: "topup"`, the user's `amount` in minor currency units, `currency`, and `confirmed: true`; never send `price_id`/);
+  assert.match(skillSource, /[Nn]ever send `amount`\/`currency` for a catalogue purchase and never send `price_id` for\s+a topup/);
+  assert.match(skillSource, /server rejects a mixed call, a topup without\s+`amount`\/`currency`/);
+  assert.match(skillSource, /must be exactly the server-owned `"topup"` product returned by `match_products`/);
+  assert.match(skillSource, /`10 USD` becomes `1000`/);
+  assert.match(skillSource, /do not convert the currency/);
+  assert.match(skillSource, /Never take this amount from `get_payment_config`, a price, memory, or a default/);
+  assert.match(skillSource, /If the user stated no amount, ask for it/);
+  assert.match(skillSource, /topup amount that no ACTIVE Instruction covers returns `SETUP_REQUIRED`/);
+  assert.match(skillSource, /the same `merchant_id` \+ `product_id: "topup"` \+ `amount` \+ `currency` in topup mode/);
+});
+
 test("the 402 auto-pay recovery path stays preserved and out of the Quick Pay route", () => {
   assert.match(skillSource, /## Merchant Payment Handoff Contract \(402 auto-pay recovery — PRESERVED, unchanged\)/);
   assert.match(skillSource, /### 402 Recovery Contract \(Hard Rule — PRESERVED, unchanged\)/);
   assert.match(skillSource, /## Amount Selection Rule for 402 Auto-Pay Recovery \(PRESERVED — unchanged\)/);
   assert.match(skillSource, /For 402 recovery only, retain `merchant_integration` from the existing directive/);
-  assert.match(skillSource, /never use `quick_pay` to bypass an\s+authoritative 402 session/);
+  assert.match(skillSource, /never use `quick_pay` to\s+bypass an\s+authoritative 402 session/);
   assert.match(skillSource, /clink-cli pay --merchant-id <MERCHANT_ID> --amount <AMOUNT> --currency <CURRENCY>/);
 });
 
 test("skill package exposes the contract test command and bumps the skill version", () => {
-  assert.equal(packageSource.version, "1.2.0");
+  assert.equal(packageSource.version, "1.3.0");
   assert.equal(packageSource.scripts.test, "node --test ../tests/*.test.mjs");
-  assert.match(skillSource, /^version: "1\.2\.0"$/m);
+  assert.match(skillSource, /^version: "1\.3\.0"$/m);
 });
