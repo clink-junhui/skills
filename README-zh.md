@@ -4,21 +4,23 @@
 
 ModelMax Skills 可以为支持通过 mcporter 调用 MCP 工具的 Agent 增加图片生成、视频生成、余额查询和可选的自动充值能力。
 
-ModelMax 手动充值使用 Clink MCP `search_merchants`，只传 `keyword`
-（最长 100 字符、最多 3 条结果），用户确认商户后调用 `quick_pay`。
-用户要求复用当前已确认的精确商户时可跳过搜索。Quick Pay 必须传
-`confirmed: true` 和整数最小货币单位金额（100 USD = 10000），只准备支付。
-用户批准服务端当前 `CONFIRM` 后才调用 `execute_payment`；遇到
-`SETUP_REQUIRED` 完成服务端指示的设置后，用原 `operation_id` 续接
-`quick_pay`。Host 不枚举 Instruction，也不回退到 direct pay。
+ModelMax 手动充值（以及用户已在 prompt 中给出商户名称或域名的场景）使用 Clink MCP
+`match_products`：`merchant_name` 或 `merchant_url` 至少传一个，`product_name` 可选
+（不传则返回该商户全部商品）；随后由用户显式确认一个
+`merchant_id` + `product_id` + `price_id`，再调用 `quick_pay`。
+Quick Pay 不再传 `amount`、`currency` 或 `products`，金额与币种由服务端按
+`price_id` 解析；它只准备支付，用户批准服务端当前 `CONFIRM` 后才调用
+`execute_payment`；遇到 `SETUP_REQUIRED` 完成服务端指示的设置后，用原
+`operation_id` 续接 `quick_pay`。Host 不枚举 Instruction，也不回退到 direct pay。
+如果对话里完全没有商户信息，则走既有 UCP `discover_catalog` 路径。
 
 Reference 和 metadata 均可选，有则原样保留；服务端补充
-`metadata.charge_scene=QUICK_PAY`。不猜测商户 ID、引用或客户身份，
-不向 Quick Pay 传 `products` 或 `merchant_integration`。
+`metadata.charge_scene=QUICK_PAY`。不猜测商户/商品/价格 ID、引用或客户身份，
+也不在 Host 侧构造支付参数。
 支付 Operation 为 `SUCCEEDED` 后，将其 `orderId` 适配为现有
 `payment_handoff`，每个订单只调用一次 `check_recharge_status`；
 Quick Pay 本身不返回该 handoff。到账仍依赖现有 ModelMax 后端集成，
-此仓库不创建 webhook endpoint。现有 402 自动充值流程不变。
+此仓库不创建 webhook endpoint。现有 402 自动充值流程保持不变。
 
 ---
 
